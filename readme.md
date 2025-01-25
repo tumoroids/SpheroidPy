@@ -20,18 +20,16 @@ SpheroidPy facilitates data import, spheroid segmentation, and comprehensive ana
   <table style="margin-left: auto; margin-right: 0;">
     <tr>
       <td style="text-align: center;">
-        <img src="docs/source/_images/spheroid_growth_plot.png" width="130" height="auto" />
+        <img src="docs/source/_images/spheroid_growth_plot.png" width="180" height="auto" />
         <p>Plot of Spheroid Growth</p>
       </td>
       <td style="text-align: center;">
-        <img src="docs/source/_images/spheroid_growth_example_movie.gif" width="130" height="auto" />
+        <img src="docs/source/_images/spheroid_growth_example_movie.gif" width="180" height="auto" />
         <p>Timelapse Video</p>
       </td>
     </tr>
   </table>
 </div>
-Proliferation assays are essential for studying growth kinetics in three-dimensional spheroid cultures. Besides simple growth curves, also more complex behaviors - such as the emergence of a necrotic core at a critical size \( $R_c$ \) or saturation at large sizes - can be assessed from such data.
-SpheroidPy facilitates data import, spheroid segmentation, and comprehensive analysis of growth dynamics, including automated statistical evaluations.
 
 ### Cytotoxity Assays
 
@@ -72,18 +70,21 @@ To be implemented...
 
 To be implemented...
 
-<div style="float: none; display: flex;gap: 20px; justify-content: space-between;">
-    <div style="text-align: center;">
-        <img src="docs/source/_images/overview_page.png" width="250" />
-        <p>Overview Page</p>
-    </div>
-    <div style="text-align: center;">
-        <img src="docs/source/_images/results_page.png" width="300" />
-        <p>Results Page</p>
-    </div>
-    <div style="text-align: center;">
-        <img src="docs/source/_images/analyses_page.png" width="250" />
-        <p>Analysis Page</p>
-    </div>
-</div>
-Figure: Interactive Visualisation of the obtained Results and Analysis Outcomes
+<table style="width: 100%; text-align: center; margin-left: auto; margin-right: auto;">
+  <tr>
+    <td style="padding: 10px;">
+      <img src="docs/source/_images/overview_page.png" width="250" />
+      <p>Overview Page</p>
+    </td>
+    <td style="padding: 10px;">
+      <img src="docs/source/_images/results_page.png" width="300" />
+      <p>Results Page</p>
+    </td>
+    <td style="padding: 10px;">
+      <img src="docs/source/_images/analyses_page.png" width="250" />
+      <p>Analysis Page</p>
+    </td>
+  </tr>
+</table>
+<p>Figure: Interactive Visualisation of the obtained Results and Analysis Outcomes</p>
+
