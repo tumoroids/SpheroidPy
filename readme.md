@@ -41,7 +41,7 @@ After installation, `SpheroidPy` can be imported and utilized in Python scripts 
 from SpheroidPy import Experiment
 new_experiment = Experiment('ExperimentName', 96, 'path/to/directory')
 ```
-To enhance functionality, additional classes such as `Result`, `Platemap`, `Analysis` and `Visualisation` are provided. A brief overview of their usage is included below, with further details available in the [documentation](https://cedhe.github.io/SpheroidPy/SpheroidPy/docs/build/html/index.html). A short tutorial is available in the [examples](https://cedhe.github.io/SpheroidPy/SpheroidPy/examples) folder.
+To enhance functionality, additional classes such as `Result`, `Platemap`, `Analysis` and `Visualisation` are provided. A brief overview of their usage is included below, with further details available in the [documentation](https://cedhe.github.io/SpheroidPy/SpheroidPy/docs/build/html/index.html). A short tutorial is available in the [examples](https://github.com/CedHe/SpheroidPy/tree/master/examples) folder.
 
 Alternatively, there is a graphical user interface available. It can be started by running the following command in the terminal:
 
