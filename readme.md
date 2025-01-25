@@ -2,10 +2,9 @@
 [![PyPI version](https://badge.fury.io/py/SpheroidPy.svg)](https://badge.fury.io/py/SpheroidPy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
+## Overview
 
 <img src="docs/source/_images/SpheroidPy_logo.png" width="150em" align="right" style="margin-left: 20px; margin-bottom: 20px;" />
-
-## Overview
 
 `SpheroidPy` is a Python package designed for the management and analysis of _in-vitro_ spheroid data. 
 It offers a unified framework with an interface to facilitate the handling, segmentation, and analysis of extensive collections of spheroid microscopy images. 
@@ -18,11 +17,11 @@ While primarily developed and optimized for cancer spheroid proliferation and cy
 
 <div style="float: right; display: flex;gap: 30px; justify-content: space-between; margin-left: 15px; margin-bottom: 10px;">
     <div style="text-align: center;">
-        <img src="docs/source/_images/spheroid_growth_plot.png" height="130" />
+        <img src="docs/source/_images/spheroid_growth_plot.png" height="130" width="auto" />
         <p>Plot of Spheroid Growth</p>
     </div>
     <div style="text-align: center;">
-        <img src="docs/source/_images/spheroid_growth_example_movie.gif" height="130" />
+        <img src="docs/source/_images/spheroid_growth_example_movie.gif" height="130" width="auto" />
         <p>Timelapse Video</p>
     </div>
 </div>
