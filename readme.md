@@ -15,8 +15,8 @@ While primarily developed and optimized for cancer spheroid proliferation and cy
 
 ### Proliferation Assays
 <img src="docs/source/_images/spheroid_growth_example_movie.gif" width="250px" align="right" style="margin-left: 20px; margin-bottom: 20px;" />
-Proliferation assays are essential for studying growth kinetics in three-dimensional spheroid cultures. Besides simple growth curves, also more complex behaviors - such as the emergence of a necrotic core at a critical size \( $R_c$ \) or saturation at large sizes - can be assessed from such data.
-SpheroidPy facilitates data import, spheroid segmentation, and comprehensive analysis of growth dynamics, including automated statistical evaluations.
+Proliferation assays are essential for studying growth kinetics in three-dimensional spheroid cultures. Besides simple growth curves, more complex behaviors - such as the emergence of a necrotic core at a critical size $R_c$ or saturation at large sizes - can be assessed from such data.
+`SpheroidPy` facilitates data import, spheroid segmentation, and comprehensive analysis of growth dynamics, including automated statistical evaluations.
 
 ### Cytotoxity Assays
 
