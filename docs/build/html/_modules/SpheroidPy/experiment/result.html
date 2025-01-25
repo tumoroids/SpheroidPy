@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpheroidPy.experiment.result &mdash; SpheroidPy 0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=17bff7d0" />
+
+  
+    <link rel="shortcut icon" href="../../../_static/SpheroidPy_logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=2709fde1"></script>
+        <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html">
+            
+              <img src="../../../_static/SpheroidPy_logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_manual.html">User Manual</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../SpheroidPy.html">SpheroidPy package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">SpheroidPy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">SpheroidPy.experiment.result</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for SpheroidPy.experiment.result</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">openpyxl</span> <span class="kn">import</span> <span class="n">Workbook</span><span class="p">,</span> <span class="n">load_workbook</span>
+<span class="kn">from</span> <span class="nn">openpyxl.utils</span> <span class="kn">import</span> <span class="n">get_column_letter</span>
+<span class="kn">from</span> <span class="nn">openpyxl.styles</span> <span class="kn">import</span> <span class="n">PatternFill</span><span class="p">,</span> <span class="n">Alignment</span><span class="p">,</span> <span class="n">Font</span><span class="p">,</span> <span class="n">Protection</span><span class="p">,</span> <span class="n">Border</span><span class="p">,</span> <span class="n">Side</span>
+
+
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">tqdm.notebook</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">import</span> <span class="nn">random</span><span class="o">,</span> <span class="nn">re</span><span class="o">,</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">h5py</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">import</span> <span class="nn">cv2</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">ipywidgets</span> <span class="k">as</span> <span class="nn">widgets</span>
+<span class="kn">from</span> <span class="nn">IPython.display</span> <span class="kn">import</span> <span class="n">display</span>
+<span class="kn">from</span> <span class="nn">mpl_toolkits.axes_grid1.anchored_artists</span> <span class="kn">import</span> <span class="n">AnchoredSizeBar</span>
+
+<span class="kn">from</span> <span class="nn">SpheroidPy.experiment.base</span> <span class="kn">import</span> <span class="n">Base</span>
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">SpheroidPy.experiment.experiment</span> <span class="kn">import</span> <span class="n">Experiment</span>
+    <span class="kn">from</span> <span class="nn">SpheroidPy</span> <span class="kn">import</span> <span class="n">Platemap</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.spheroid</span> <span class="kn">import</span> <span class="n">spheroid_image</span>
+
+<span class="kn">from</span> <span class="nn">SpheroidPy.spheroid.spheroid_image</span> <span class="kn">import</span> <span class="n">SpheroidImage</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.spheroid.spheroid_series</span> <span class="kn">import</span> <span class="n">SpheroidSeries</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.spheroid.spheroid_collection</span> <span class="kn">import</span> <span class="n">SpheroidCollection</span>
+
+<span class="kn">from</span> <span class="nn">SpheroidPy.utils.file_management</span> <span class="kn">import</span> <span class="n">collect_data</span><span class="p">,</span> <span class="n">print_directory_tree</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.utils.geometry</span> <span class="kn">import</span> <span class="n">touches_border</span><span class="p">,</span> <span class="n">fit_ellipse</span><span class="p">,</span> <span class="n">remove_border_points</span><span class="p">,</span> <span class="n">add_fitted_contour</span><span class="p">,</span> <span class="n">find_inflection_point</span>
+
+
+
+
+<div class="viewcode-block" id="Result">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.result.Result">[docs]</a>
+<span class="k">class</span> <span class="nc">Result</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A class for managing and analyzing experimental results.</span>
+<span class="sd">    </span>
+<span class="sd">    Handles loading, processing and analysis of image data for multiple wells</span>
+<span class="sd">    and timepoints. Manages associated platemap data and analysis metrics.</span>
+<span class="sd">    </span>
+<span class="sd">    Attributes:</span>
+<span class="sd">        platemap: Associated Platemap object defining well contents</span>
+<span class="sd">        spheroid_dict: Dictionary mapping well IDs to SpheroidSeries objects</span>
+<span class="sd">        files_dict: Nested dict mapping channels -&gt; wells -&gt; timepoints to image paths</span>
+<span class="sd">        time_points_array: List of absolute timepoints that have been loaded</span>
+<span class="sd">        relative_time_array: List of relative times in hours from experiment start</span>
+<span class="sd">        metric_dfs: Dictionary storing computed metrics for the experiment</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">platemap</span><span class="p">:</span> <span class="n">Platemap</span>          <span class="c1"># Platemap that has been associated with this result</span>
+
+
+    <span class="c1"># SpheroidResults</span>
+    <span class="n">spheroid_dict</span><span class="p">:</span> <span class="nb">dict</span>         <span class="c1"># stores all SpheroidSeries</span>
+
+    <span class="c1"># File Management</span>
+    <span class="n">files_dict</span><span class="p">:</span> <span class="nb">dict</span>            <span class="c1"># dictionary of dictionaries with all channels -&gt; wells -&gt; timepoints that have been loaded</span>
+    <span class="n">time_points_array</span><span class="p">:</span> <span class="nb">list</span>     <span class="c1"># list with all absolute timepoints that have been loaded</span>
+    <span class="n">relative_time_array</span><span class="p">:</span> <span class="nb">list</span>   <span class="c1"># list with relative times of the above (in [h])</span>
+
+    <span class="c1">#</span>
+    <span class="n">metric_dfs</span><span class="p">:</span> <span class="nb">dict</span>      <span class="c1"># stores the metrics of an experiment (once they have been calculated)</span>
+
+    <span class="c1"># Visualisation</span>
+    <span class="n">plot_name_dict</span> <span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;radius&#39;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;effective Radius ($r_</span><span class="si">{eff}</span><span class="s1">=\frac</span><span class="si">{Area}</span><span class="s1">{\pi}$) [µm]&#39;</span><span class="p">}</span>
+    <span class="n">data_has_been_loaded</span><span class="p">:</span> <span class="nb">bool</span>
+
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">experiment</span><span class="p">:</span> <span class="n">Experiment</span><span class="p">):</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">experiment</span><span class="p">,</span> <span class="s1">&#39;Result&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">data_has_been_loaded</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="n">instance_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_key</span><span class="p">]</span>
+            <span class="n">instance_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="c1">#todo: wieder einblenden</span>
+            <span class="n">instance_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;index&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span>
+
+            <span class="n">platemap_group</span> <span class="o">=</span> <span class="n">instance_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s1">&#39;Platemap&#39;</span><span class="p">)</span>
+
+        <span class="kn">from</span> <span class="nn">SpheroidPy.experiment.platemap</span> <span class="kn">import</span> <span class="n">Platemap</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">platemap</span> <span class="o">=</span> <span class="n">Platemap</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="c1"># storage for AnalysesMetrics</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metric_dfs</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="Result.from_file">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.result.Result.from_file">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_file</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">experiment</span><span class="p">:</span> <span class="n">Experiment</span><span class="p">,</span> <span class="n">instace_group</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">,</span> <span class="n">hdf5_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="nb">object</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+
+        <span class="c1"># General Properties</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">type_name</span> <span class="o">=</span> <span class="s1">&#39;Result&#39;</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">experiment</span> <span class="o">=</span> <span class="n">experiment</span>
+
+        <span class="n">result</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">index</span>
+
+        <span class="n">result</span><span class="o">.</span><span class="n">hdf5_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;Result/</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&#39;</span>
+
+        <span class="c1"># Platemap</span>
+        <span class="n">platemap_group</span> <span class="o">=</span> <span class="n">instace_group</span><span class="p">[</span><span class="s1">&#39;Platemap&#39;</span><span class="p">]</span>
+        <span class="kn">from</span> <span class="nn">SpheroidPy</span> <span class="kn">import</span> <span class="n">Platemap</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">platemap</span> <span class="o">=</span> <span class="n">Platemap</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">platemap_group</span><span class="p">)</span>
+
+        <span class="c1"># Image Series</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">data_has_been_loaded</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">spheroid_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">metric_dfs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">files_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">time_points_array</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">image_series_group</span> <span class="o">=</span> <span class="n">instace_group</span><span class="p">[</span><span class="s1">&#39;ImageSeries&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">well</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">image_series_group</span><span class="p">)),</span> <span class="n">desc</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Loading Result </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">index</span><span class="si">}</span><span class="s1"> - </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">),</span> <span class="n">image_series_group</span><span class="p">):</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">well</span><span class="p">]</span> <span class="o">=</span> <span class="n">SpheroidSeries</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Spheroid-</span><span class="si">{</span><span class="n">well</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">well_group</span> <span class="o">=</span> <span class="n">image_series_group</span><span class="p">[</span><span class="n">well</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">absolute_timepoint</span> <span class="ow">in</span> <span class="n">well_group</span><span class="p">:</span>
+                <span class="n">timepoint_group</span> <span class="o">=</span> <span class="n">well_group</span><span class="p">[</span><span class="n">absolute_timepoint</span><span class="p">]</span>
+                <span class="n">image_paths</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="k">for</span> <span class="n">channel</span><span class="p">,</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">timepoint_group</span><span class="p">[</span><span class="s1">&#39;image_paths&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="c1"># Als String dekodieren, falls es sich um Bytes handelt</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">path</span><span class="p">[()],</span> <span class="nb">bytes</span><span class="p">):</span>
+                        <span class="n">path_string</span> <span class="o">=</span> <span class="n">path</span><span class="p">[()]</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>  <span class="c1"># UTF-8-Decodierung</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">path_string</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">[()])</span>  <span class="c1"># Direkt in String umwandeln</span>
+                    <span class="n">image_paths</span><span class="p">[</span><span class="n">channel</span><span class="p">]</span> <span class="o">=</span> <span class="n">path_string</span>
+
+                    <span class="c1"># Files Dictionary</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">result</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">][</span><span class="n">well</span><span class="p">][</span><span class="n">absolute_timepoint</span><span class="p">]</span> <span class="o">=</span> <span class="n">path_string</span>
+                    <span class="k">except</span><span class="p">:</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="n">result</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">][</span><span class="n">well</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+                            <span class="n">result</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">][</span><span class="n">well</span><span class="p">][</span><span class="n">absolute_timepoint</span><span class="p">]</span> <span class="o">=</span> <span class="n">path_string</span>
+                        <span class="k">except</span><span class="p">:</span>
+                            <span class="n">result</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+                            <span class="n">result</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">][</span><span class="n">well</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+                            <span class="n">result</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">][</span><span class="n">well</span><span class="p">][</span><span class="n">absolute_timepoint</span><span class="p">]</span> <span class="o">=</span> <span class="n">path_string</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">time_points_array</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">absolute_timepoint</span><span class="p">)</span>
+
+
+                <span class="n">spheroid</span> <span class="o">=</span> <span class="n">SpheroidImage</span><span class="p">(</span><span class="n">image_paths</span><span class="p">[</span><span class="s1">&#39;brightfield&#39;</span><span class="p">],</span>
+                            <span class="n">fluorescence_green</span><span class="o">=</span><span class="n">image_paths</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;fluorescence_green&#39;</span><span class="p">),</span>
+                            <span class="n">fluorescence_red</span><span class="o">=</span><span class="n">image_paths</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;fluorescence_red&#39;</span><span class="p">),</span>
+                            <span class="n">image_size</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">timepoint_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;image_size_x_y&#39;</span><span class="p">]),</span>
+                            <span class="n">hdf5_key</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">timepoint_group</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+                <span class="c1"># Überprüfen, ob das Dataset &#39;contour&#39; in der Gruppe existiert</span>
+                <span class="k">if</span> <span class="s2">&quot;contour&quot;</span> <span class="ow">in</span> <span class="n">timepoint_group</span><span class="p">:</span>
+                    <span class="n">contour_dataset</span> <span class="o">=</span> <span class="n">timepoint_group</span><span class="p">[</span><span class="s2">&quot;contour&quot;</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">contour_dataset</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">():</span>  <span class="c1"># Scalar dataset</span>
+                        <span class="k">pass</span>  <span class="c1"># Use () to access scalar values</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">contour</span> <span class="o">=</span> <span class="n">contour_dataset</span><span class="p">[:]</span>  <span class="c1"># Use slicing for non-scalar datasets</span>
+                    <span class="n">spheroid</span><span class="o">.</span><span class="n">contour</span> <span class="o">=</span> <span class="n">contour</span>
+
+                    <span class="c1"># Überprüfen, ob das Attribut &#39;touches_border&#39; existiert</span>
+                    <span class="k">if</span> <span class="s2">&quot;contour_touches_border&quot;</span> <span class="ow">in</span> <span class="n">timepoint_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
+                        <span class="n">touches_border</span> <span class="o">=</span> <span class="n">timepoint_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;touches_border&quot;</span><span class="p">]</span>
+                        <span class="n">spheroid</span><span class="o">.</span><span class="n">contour_touches_border</span> <span class="o">=</span> <span class="n">touches_border</span>
+
+
+                <span class="n">result</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">well</span><span class="p">]</span><span class="o">.</span><span class="n">add_spheroid_image</span><span class="p">(</span><span class="n">spheroid</span><span class="p">,</span> <span class="n">absolute_timepoint</span><span class="p">)</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">time_points_array</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">))</span>
+        <span class="n">time_points_dt</span> <span class="o">=</span> <span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">tp</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">tp</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">]</span>
+        <span class="c1"># Berechne die relativen Zeiten in Stunden</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">relative_time_array</span> <span class="o">=</span> <span class="p">[(</span><span class="n">tp</span> <span class="o">-</span> <span class="n">time_points_dt</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span> <span class="o">/</span> <span class="mi">3600</span> <span class="k">for</span> <span class="n">tp</span> <span class="ow">in</span> <span class="n">time_points_dt</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+
+
+<div class="viewcode-block" id="Result.load_images">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.result.Result.load_images">[docs]</a>
+    <span class="k">def</span> <span class="nf">load_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">img_folder_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+                    <span class="n">brightfield_filters</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fluorescence_green_filters</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">fluorescence_red_filters</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">fluorescence_blue_filters</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">image_size</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load and process image data from specified folder.</span>
+<span class="sd">        </span>
+<span class="sd">        Searches for images matching the specified filters and loads them into</span>
+<span class="sd">        SpheroidImage instances organized by well and timepoint.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            img_folder_path: Path to folder containing image files</span>
+<span class="sd">            brightfield_filters: Filter pattern(s) for brightfield images</span>
+<span class="sd">            fluorescence_green_filters: Optional filter pattern(s) for green fluorescence</span>
+<span class="sd">            fluorescence_red_filters: Optional filter pattern(s) for red fluorescence </span>
+<span class="sd">            fluorescence_blue_filters: Optional filter pattern(s) for blue fluorescence</span>
+<span class="sd">            image_size: Optional tuple (width, height) specifying image size in μm</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            DataFrame summarizing loaded image data</span>
+<span class="sd">            </span>
+<span class="sd">        Raises:</span>
+<span class="sd">            Exception: If data has already been loaded for this Result</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># when data has been already loaded to Result-Instance, no other data can be loaded unless it has been cleared previously</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_has_been_loaded</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Data has already been loaded&#39;</span><span class="p">)</span>
+
+<span class="w">        </span><span class="sd">&#39;&#39;&#39; File Management &#39;&#39;&#39;</span>
+        <span class="c1"># collect all pathes for each channel &amp; timepoint in self.files_dict</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">channel</span><span class="p">,</span> <span class="n">filters</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">([</span><span class="s1">&#39;brightfield&#39;</span><span class="p">,</span><span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span><span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span><span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">],</span> <span class="p">[</span><span class="n">brightfield_filters</span><span class="p">,</span> <span class="n">fluorescence_green_filters</span><span class="p">,</span> <span class="n">fluorescence_red_filters</span><span class="p">,</span> <span class="n">fluorescence_blue_filters</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="n">filters</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">len</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="c1"># add time_points_array only for data of first channel</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span> <span class="o">=</span> <span class="n">collect_data</span><span class="p">(</span><span class="n">img_folder_path</span><span class="p">,</span> <span class="n">filters</span><span class="p">)</span><span class="c1">#[n] if isinstance(filters, list) and all(isinstance(item, list) for item in filters) else filters)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">],</span> <span class="n">_</span> <span class="o">=</span> <span class="n">collect_data</span><span class="p">(</span><span class="n">img_folder_path</span><span class="p">,</span> <span class="n">filters</span><span class="p">)</span><span class="c1">#[n] if isinstance(filters, list) and all(isinstance(item, list) for item in filters) else filters)[0]</span>
+
+<span class="w">        </span><span class="sd">&#39;&#39;&#39; Relative Timepoint Calculations &#39;&#39;&#39;</span>
+        <span class="c1"># Konvertiere die Zeitpunkte zu datetime-Objekten</span>
+        <span class="n">time_points_dt</span> <span class="o">=</span> <span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">tp</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">tp</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">]</span>
+        <span class="c1"># Berechne die relativen Zeiten in Stunden</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relative_time_array</span> <span class="o">=</span> <span class="p">[(</span><span class="n">tp</span> <span class="o">-</span> <span class="n">time_points_dt</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span> <span class="o">/</span> <span class="mi">3600</span> <span class="k">for</span> <span class="n">tp</span> <span class="ow">in</span> <span class="n">time_points_dt</span><span class="p">]</span>
+
+<span class="w">        </span><span class="sd">&#39;&#39;&#39; Alle Bilder durchgehen &#39;&#39;&#39;</span>
+        <span class="n">wells</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="s1">&#39;brightfield&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">wells</span> <span class="o">=</span> <span class="p">[</span><span class="n">well</span> <span class="k">for</span> <span class="n">well</span> <span class="ow">in</span> <span class="n">wells</span> <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">well</span> <span class="ow">in</span> <span class="n">value_list</span> <span class="k">for</span> <span class="n">value_list</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">platemap</span><span class="o">.</span><span class="n">replicates</span><span class="o">.</span><span class="n">values</span><span class="p">())]</span>
+        <span class="n">wells</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:]),</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span> <span class="c1"># liste in der nur noch wells drinnen sind, die auch in der Platemap angegeben sind</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Looking for Wells: &#39;</span><span class="p">,</span><span class="n">wells</span><span class="p">)</span>
+
+        <span class="c1"># durchstöbert every image: Well -&gt; all Timepoints</span>
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">wells</span><span class="p">)),</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;Well&quot;</span><span class="p">),</span> <span class="n">wells</span><span class="p">):</span>
+                <span class="n">well_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="o">.</span><span class="n">require_group</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_key</span><span class="si">}</span><span class="s1">/ImageSeries/</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+                <span class="k">for</span> <span class="n">timepoint</span><span class="p">,</span> <span class="n">rel_timepoint</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">relative_time_array</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">timepoint</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="s1">&#39;brightfield&#39;</span><span class="p">][</span><span class="n">index</span><span class="p">]:</span>
+
+                        <span class="n">timepoint_group</span> <span class="o">=</span> <span class="n">well_group</span><span class="o">.</span><span class="n">require_group</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">timepoint</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+                        <span class="n">timepoint_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;date&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">)</span>
+                        <span class="n">timepoint_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;rel_timepoint&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">rel_timepoint</span><span class="si">}</span><span class="s1">&#39;</span>
+                        <span class="n">timepoint_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;unit&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;h&#39;</span>
+
+                        <span class="n">spheroid</span> <span class="o">=</span> <span class="n">SpheroidImage</span><span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="s1">&#39;brightfield&#39;</span><span class="p">][</span><span class="n">index</span><span class="p">][</span><span class="n">timepoint</span><span class="p">],</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">timepoint</span><span class="p">),</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">timepoint</span><span class="p">),</span>
+                            <span class="n">image_size</span><span class="o">=</span><span class="n">image_size</span><span class="p">,</span> <span class="n">hdf5_key</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">timepoint_group</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                        <span class="p">)</span>
+
+                        <span class="c1"># Save Spheroid in hdf5-file</span>
+                        <span class="c1"># image-paths</span>
+                        <span class="k">for</span> <span class="n">channel_key</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">spheroid</span><span class="o">.</span><span class="n">image_path_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>  <span class="c1"># [&#39;brightfield&#39;, &#39;fluorescence_green&#39;, &#39;fluorescence_red&#39;, &#39;fluorescence_blue&#39;]</span>
+                            <span class="n">image_path_group</span> <span class="o">=</span> <span class="n">timepoint_group</span><span class="o">.</span><span class="n">require_group</span><span class="p">(</span><span class="s1">&#39;image_paths&#39;</span><span class="p">)</span>
+                            <span class="n">data_channel_path</span> <span class="o">=</span> <span class="n">image_path_group</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">channel_key</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span> <span class="n">spheroid</span><span class="o">.</span><span class="n">image_path_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">channel_key</span><span class="p">)</span> <span class="p">)</span><span class="o">.</span><span class="n">absolute</span><span class="p">())</span> <span class="p">)</span>
+                        <span class="n">timepoint_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;image_size_x_y&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">spheroid</span><span class="o">.</span><span class="n">image_size</span>
+
+                        <span class="c1"># add SpheroidImage to spheroid_dict</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">add_spheroid_image</span><span class="p">(</span><span class="n">spheroid</span><span class="p">,</span> <span class="n">timepoint</span><span class="p">)</span>
+                        <span class="k">except</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">SpheroidSeries</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Spheroid-</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">add_spheroid_image</span><span class="p">(</span><span class="n">spheroid</span><span class="p">,</span> <span class="n">timepoint</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">data_has_been_loaded</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Images have been loaded successfully!&#39;</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">nr_images</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;index&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;A&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;E&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;F&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+                      <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">],</span>
+            <span class="mi">1</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">2</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">3</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">4</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">5</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">6</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">7</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">8</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">9</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">10</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">11</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="mi">12</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+            <span class="s1">&#39;Channel&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;brightfield&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">,</span> <span class="s1">&#39;brightfield&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">,</span> <span class="s1">&#39;brightfield&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">,</span> <span class="s1">&#39;brightfield&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">,</span> <span class="s1">&#39;brightfield&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">,</span> <span class="s1">&#39;brightfield&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">,</span> <span class="s1">&#39;brightfield&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">,</span> <span class="s1">&#39;brightfield&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">],</span>
+        <span class="p">}</span>
+
+        <span class="n">image_nr_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">channel_nr_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;brightfield&#39;</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">:</span><span class="mi">3</span><span class="p">}</span>
+        <span class="k">for</span> <span class="n">channel</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">well</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">]:</span>
+
+                <span class="n">letter_nr</span><span class="p">,</span> <span class="n">col</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">ord</span><span class="p">(</span><span class="n">well</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span> <span class="o">-</span> <span class="nb">ord</span><span class="p">(</span><span class="s1">&#39;a&#39;</span><span class="p">)),</span> <span class="nb">int</span><span class="p">(</span><span class="n">well</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="n">letter_nr</span><span class="o">*</span><span class="mi">4</span> <span class="o">+</span> <span class="n">channel_nr_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">]</span>
+
+                <span class="n">nr_images</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="n">channel</span><span class="p">][</span><span class="n">well</span><span class="p">])</span>
+                <span class="n">data</span><span class="p">[</span><span class="n">col</span><span class="p">][</span><span class="n">row</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">nr_images</span><span class="p">)</span>
+
+        <span class="c1"># Function to style rows with colors and borders</span>
+        <span class="k">def</span> <span class="nf">colorize_and_add_borders</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">row_group_count</span><span class="o">=</span><span class="mi">4</span><span class="p">):</span>
+            <span class="c1"># Color palette for groups</span>
+            <span class="n">colors</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;#C8C8C8&quot;</span><span class="p">,</span> <span class="s2">&quot;#D5FFCC&quot;</span><span class="p">,</span> <span class="s2">&quot;#FFCCCC&quot;</span><span class="p">,</span> <span class="s2">&quot;#CCE5FF&quot;</span><span class="p">]</span>  <span class="c1"># Gray, Green, Red, Blue</span>
+            <span class="n">group_index</span> <span class="o">=</span> <span class="n">index</span> <span class="o">%</span> <span class="n">row_group_count</span>  <span class="c1"># Grouping index</span>
+            <span class="n">color</span> <span class="o">=</span> <span class="n">colors</span><span class="p">[</span><span class="n">group_index</span><span class="p">]</span>  <span class="c1"># Assign color</span>
+
+            <span class="c1"># Set background color</span>
+            <span class="n">styles</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;background-color: </span><span class="si">{</span><span class="n">color</span><span class="si">}</span><span class="s2">; border-right: 2px solid black;&quot;</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span>
+
+            <span class="c1"># Add border if it&#39;s the last row in the group</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="n">row_group_count</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">styles</span> <span class="o">=</span> <span class="p">[</span><span class="n">style</span> <span class="o">+</span> <span class="s2">&quot; border-bottom: 2px solid black;&quot;</span> <span class="k">for</span> <span class="n">style</span> <span class="ow">in</span> <span class="n">styles</span><span class="p">]</span>
+
+            <span class="k">return</span> <span class="n">styles</span>
+
+        <span class="c1"># Apply styling function to the DataFrame</span>
+        <span class="k">def</span> <span class="nf">style_dataframe</span><span class="p">(</span><span class="n">df</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">style</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">colorize_and_add_borders</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">row</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span>
+            <span class="p">)</span>
+
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="c1"># Replace NaNs with empty strings</span>
+        <span class="n">df</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">pd</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">display</span><span class="o">.</span><span class="n">float_format</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">{:d}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span>  <span class="c1"># Deaktiviert die Anzeige als float</span>
+        <span class="k">return</span> <span class="n">style_dataframe</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">df</span><span class="p">))</span>
+
+<div class="viewcode-block" id="Result.segmentation">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.result.Result.segmentation">[docs]</a>
+    <span class="k">def</span> <span class="nf">segmentation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">segmentation</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;thresholding&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">),</span> <span class="n">reconstruct_border</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Perform spheroid segmentation across all images.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            segmentation: Tuple of (method, channel) where method is either</span>
+<span class="sd">                &#39;thresholding&#39; or &#39;ai&#39;, and channel specifies which image to use</span>
+<span class="sd">            reconstruct_border: Whether to reconstruct spheroid border when it</span>
+<span class="sd">                extends beyond image bounds</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+<span class="w">        </span><span class="sd">&#39;&#39;&#39; Alle Bilder durchgehen &#39;&#39;&#39;</span>
+        <span class="n">wells</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="s1">&#39;brightfield&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">wells</span> <span class="o">=</span> <span class="p">[</span><span class="n">well</span> <span class="k">for</span> <span class="n">well</span> <span class="ow">in</span> <span class="n">wells</span> <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">well</span> <span class="ow">in</span> <span class="n">value_list</span> <span class="k">for</span> <span class="n">value_list</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">platemap</span><span class="o">.</span><span class="n">replicates</span><span class="o">.</span><span class="n">values</span><span class="p">())]</span>
+        <span class="n">wells</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:]),</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>  <span class="c1"># liste in der nur noch wells drinnen sind, die auch in der Platemap angegeben sind</span>
+
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">wells</span><span class="p">)),</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;Well&quot;</span><span class="p">),</span> <span class="n">wells</span><span class="p">):</span>
+                <span class="n">spheroid_series</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">timepoint</span><span class="p">,</span> <span class="n">rel_timepoint</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">relative_time_array</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">timepoint</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="s1">&#39;brightfield&#39;</span><span class="p">][</span><span class="n">index</span><span class="p">]:</span>
+                        <span class="n">spheroid</span> <span class="o">=</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="p">[</span><span class="n">timepoint</span><span class="p">]</span>
+                        <span class="n">spheroid</span><span class="o">.</span><span class="n">segmentation</span><span class="p">(</span><span class="n">segmentation</span><span class="o">=</span><span class="n">segmentation</span><span class="p">,</span> <span class="n">reconstruct_border</span><span class="o">=</span><span class="n">reconstruct_border</span><span class="p">)</span>
+
+                        <span class="k">if</span> <span class="n">spheroid</span><span class="o">.</span><span class="n">contour</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="n">timepoint_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="p">[</span><span class="n">spheroid</span><span class="o">.</span><span class="n">hdf5_key</span><span class="p">]</span>
+                            <span class="c1"># Save Spheroid in hdf5-file</span>
+                            <span class="c1"># contour</span>
+                            <span class="n">timepoint_group</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s1">&#39;contour&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">spheroid</span><span class="o">.</span><span class="n">contour</span> <span class="k">if</span> <span class="n">spheroid</span><span class="o">.</span><span class="n">contour</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+                            <span class="n">timepoint_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;touches_border&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">spheroid</span><span class="o">.</span><span class="n">contour_touches_border</span>  <span class="c1"># bool</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">timepoints</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get experiment timepoints in absolute and relative formats.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple of (absolute_times, relative_times) where:</span>
+<span class="sd">                absolute_times: Array of datetime strings</span>
+<span class="sd">                relative_times: Array of hours from experiment start</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">relative_time_array</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">replicates</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">SpheroidCollection</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get replicate groups based on platemap conditions.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Dictionary mapping condition strings to SpheroidCollection objects</span>
+<span class="sd">            representing spheroids with the same experimental conditions.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">replicates_dict</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># {condition: SpheroidCollection}</span>
+
+        <span class="c1"># Group spheroids by condition from platemap</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">platemap</span><span class="o">.</span><span class="n">replicates</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="c1"># Create condition string from platemap key</span>
+            <span class="n">condition</span> <span class="o">=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">key</span><span class="p">])</span>
+            <span class="n">wells_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">platemap</span><span class="o">.</span><span class="n">replicates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+            
+            <span class="c1"># Get valid wells that exist in spheroid_dict</span>
+            <span class="n">valid_wells</span> <span class="o">=</span> <span class="p">[</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">wells_list</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">]</span>
+            
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">valid_wells</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Warning: No valid wells found for condition &#39;</span><span class="si">{</span><span class="n">condition</span><span class="si">}</span><span class="s2">&#39; in result &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            
+            <span class="c1"># Create spheroid list for this condition</span>
+            <span class="n">spheroids</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">well</span><span class="p">]</span> <span class="k">for</span> <span class="n">well</span> <span class="ow">in</span> <span class="n">valid_wells</span><span class="p">]</span>
+            
+            <span class="c1"># Create or update SpheroidCollection</span>
+            <span class="k">if</span> <span class="n">condition</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">replicates_dict</span><span class="p">:</span>
+                <span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span> <span class="o">=</span> <span class="n">SpheroidCollection</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">condition</span><span class="p">,</span>
+                    <span class="n">spheroid_list</span><span class="o">=</span><span class="n">spheroids</span><span class="p">,</span>
+                    <span class="n">result</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+                    <span class="n">hdf5_path</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span><span class="o">.</span><span class="n">add_replicate_group</span><span class="p">(</span><span class="n">spheroids</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">replicates_dict</span>
+
+<div class="viewcode-block" id="Result.metric">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.result.Result.metric">[docs]</a>
+    <span class="k">def</span> <span class="nf">metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;radius&#39;</span><span class="p">,</span> <span class="n">mean</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> 
+               <span class="n">plot</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">skip_nan</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+               <span class="n">interpolate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ignore_border</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Calculate specified metric across wells and timepoints.</span>
+<span class="sd">        </span>
+<span class="sd">        Computes metrics like radius or area for each well/timepoint and optionally</span>
+<span class="sd">        averages across replicates defined in the platemap.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            name: Metric to calculate (&#39;radius&#39;, &#39;area&#39;, &#39;fluorescence_*&#39;)</span>
+<span class="sd">            mean: Whether to average across replicate wells</span>
+<span class="sd">            plot: Whether to display plot of results</span>
+<span class="sd">            skip_nan: Whether to exclude NaN values from plots</span>
+<span class="sd">            interpolate: Whether to interpolate missing timepoints</span>
+<span class="sd">            ignore_border: Whether to exclude spheroids touching image border</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            DataFrame containing metric values, optionally with mean/std across replicates</span>
+<span class="sd">            </span>
+<span class="sd">        Raises:</span>
+<span class="sd">            Exception: If no data has been loaded</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_has_been_loaded</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;No Data has been loaded so far!&#39;</span><span class="p">)</span>
+
+        <span class="c1"># check if it has been computed previously</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric_dfs</span><span class="p">:</span>
+            <span class="n">result_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric_dfs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;start&#39;</span><span class="p">)</span>
+            <span class="n">wells</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">files_dict</span><span class="p">[</span><span class="s1">&#39;brightfield&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+            <span class="n">wells</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:]),</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">result_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">relative_time_array</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">wells</span><span class="p">)</span>
+            <span class="n">name_split_array</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">name_split_array</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;fluorescence&#39;</span><span class="p">:</span>
+                <span class="n">result_df_cumulative</span> <span class="o">=</span> <span class="n">result_df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">result_df_mean</span> <span class="o">=</span> <span class="n">result_df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            
+            <span class="c1"># Convert list of wells to string for tqdm description</span>
+            <span class="n">wells_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+            
+            <span class="c1"># Use context manager for tqdm</span>
+            <span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">closing</span>
+            <span class="k">with</span> <span class="n">closing</span><span class="p">(</span><span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">wells_list</span><span class="p">)),</span> 
+                         <span class="n">desc</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Processing wells&#39;</span><span class="p">,</span>
+                         <span class="n">leave</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span> <span class="k">as</span> <span class="n">pbar</span><span class="p">:</span>
+                <span class="c1"># Process wells</span>
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">pbar</span><span class="p">,</span> <span class="n">wells_list</span><span class="p">):</span>
+                    <span class="n">spheroid_series</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+                    <span class="k">for</span> <span class="n">timepoint</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+                        <span class="n">rel_timepoint</span> <span class="o">=</span> <span class="p">(</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">timepoint</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">)</span> <span class="o">-</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span> <span class="o">/</span> <span class="mi">3600</span>
+                        <span class="n">spheroid_image</span> <span class="o">=</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="p">[</span><span class="n">timepoint</span><span class="p">]</span>
+
+                        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;radius&#39;</span><span class="p">:</span>
+                            <span class="n">result_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">rel_timepoint</span><span class="p">,</span> <span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">radius</span>
+                        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;area&#39;</span><span class="p">:</span>
+                            <span class="n">result_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">rel_timepoint</span><span class="p">,</span> <span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">area</span>
+
+                        <span class="c1"># other options: assume fluorescence :)</span>
+                        <span class="k">if</span> <span class="n">name_split_array</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">==</span><span class="s1">&#39;fluorescence&#39;</span><span class="p">:</span>
+                            <span class="n">color</span> <span class="o">=</span> <span class="n">name_split_array</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                            <span class="k">try</span><span class="p">:</span>
+                                <span class="n">metric_fluorescence_tuple</span> <span class="o">=</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">metric_fluorescence</span><span class="p">(</span><span class="n">color</span><span class="p">,</span> <span class="n">ignore_border</span><span class="p">)</span>
+                                <span class="n">result_df_cumulative</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">rel_timepoint</span><span class="p">,</span> <span class="n">index</span><span class="p">],</span> <span class="n">result_df_mean</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">rel_timepoint</span><span class="p">,</span> <span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">metric_fluorescence_tuple</span>
+                            <span class="k">except</span><span class="p">:</span>
+                                <span class="n">result_df_cumulative</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">rel_timepoint</span><span class="p">,</span> <span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+                                <span class="n">result_df_mean</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">rel_timepoint</span><span class="p">,</span> <span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+                <span class="n">pbar</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>  <span class="c1"># Explicitly close the progress bar</span>
+
+            <span class="k">if</span> <span class="n">name_split_array</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">==</span><span class="s1">&#39;fluorescence&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">metric_dfs</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;fluorescence_</span><span class="si">{</span><span class="n">name_split_array</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s1">_mean&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result_df_mean</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">metric_dfs</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;fluorescence_</span><span class="si">{</span><span class="n">name_split_array</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s1">_cumulative&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result_df_cumulative</span>
+                <span class="k">if</span> <span class="n">name_split_array</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;mean&#39;</span><span class="p">:</span>
+                    <span class="n">result_df</span> <span class="o">=</span> <span class="n">result_df_mean</span>
+                <span class="k">if</span> <span class="n">name_split_array</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;cumulative&#39;</span><span class="p">:</span>
+                    <span class="n">result_df</span> <span class="o">=</span> <span class="n">result_df_cumulative</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">metric_dfs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">result_df</span>
+
+        <span class="c1">#result_df = self.metric_dfs[&#39;fluorescence_red_cumulative&#39;]/self.metric_dfs[&#39;fluorescence_green_cumulative&#39;]</span>
+
+
+        <span class="k">if</span> <span class="n">interpolate</span><span class="p">:</span>
+            <span class="c1"># Interpolieren der NaN-Werte mit linearer Methode</span>
+            <span class="n">result_df</span> <span class="o">=</span> <span class="n">result_df</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;linear&#39;</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">limit_direction</span><span class="o">=</span><span class="s1">&#39;both&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">mean</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&#39;&#39;&#39; return mean/std values for every replicate instead of for every Well &#39;&#39;&#39;</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">platemap</span><span class="o">.</span><span class="n">replicates</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+                <span class="n">condition</span> <span class="o">=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">key</span><span class="p">])</span>
+                <span class="n">wells_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">platemap</span><span class="o">.</span><span class="n">replicates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+                <span class="n">valid_wells</span> <span class="o">=</span> <span class="p">[</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">wells_list</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">result_df</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">results_mean_df</span><span class="p">[(</span><span class="n">condition</span><span class="p">,</span> <span class="s1">&#39;mean&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="n">result_df</span><span class="p">[</span><span class="n">valid_wells</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                    <span class="n">results_mean_df</span><span class="p">[(</span><span class="n">condition</span><span class="p">,</span> <span class="s1">&#39;std&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="n">result_df</span><span class="p">[</span><span class="n">valid_wells</span><span class="p">]</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="k">except</span><span class="p">:</span>
+                    <span class="n">results_mean_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+                        <span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="s1">&#39;mean&#39;</span><span class="p">):</span> <span class="n">result_df</span><span class="p">[</span><span class="n">valid_wells</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                        <span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="s1">&#39;std&#39;</span><span class="p">):</span> <span class="n">result_df</span><span class="p">[</span><span class="n">valid_wells</span><span class="p">]</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                    <span class="p">})</span>
+            <span class="k">if</span> <span class="n">plot</span><span class="p">:</span> <span class="c1"># seperat Plot-Style if mean is desired</span>
+                <span class="n">df_reshaped</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">results_mean_df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">results_mean_df</span><span class="o">.</span><span class="n">columns</span><span class="p">))</span> <span class="o">/</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">tupel_</span> <span class="ow">in</span> <span class="n">df_reshaped</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">el</span> <span class="ow">in</span> <span class="n">tupel_</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">el</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;mean&#39;</span><span class="p">:</span>
+                            <span class="n">concentration</span> <span class="o">=</span> <span class="n">el</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                            <span class="n">mean_array</span> <span class="o">=</span> <span class="n">results_mean_df</span><span class="p">[</span><span class="n">el</span><span class="p">]</span>
+                        <span class="k">elif</span> <span class="n">el</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;std&#39;</span><span class="p">:</span>
+                            <span class="n">std_array</span> <span class="o">=</span> <span class="n">results_mean_df</span><span class="p">[</span><span class="n">el</span><span class="p">]</span>
+                    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">results_mean_df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">to_list</span><span class="p">())</span> <span class="o">/</span> <span class="mi">24</span>
+                    <span class="k">if</span> <span class="n">skip_nan</span><span class="p">:</span>
+                        <span class="n">valid_indices</span> <span class="o">=</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">mean_array</span><span class="p">)</span>
+
+                        <span class="c1"># Arrays filtern</span>
+                        <span class="n">mean_array</span> <span class="o">=</span> <span class="n">mean_array</span><span class="p">[</span><span class="n">valid_indices</span><span class="p">]</span>
+                        <span class="n">std_array</span> <span class="o">=</span> <span class="n">std_array</span><span class="p">[</span><span class="n">valid_indices</span><span class="p">]</span>
+                        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">valid_indices</span><span class="p">]</span>
+
+
+                    <span class="n">plt</span><span class="o">.</span><span class="n">fill_between</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">mean_array</span> <span class="o">-</span> <span class="n">std_array</span><span class="p">,</span> <span class="n">mean_array</span> <span class="o">+</span> <span class="n">std_array</span><span class="p">,</span>
+                                     <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">mean_array</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">concentration</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+                    <span class="c1"># plt.errorbar(np.array(df.index.to_list())/24, mean_array, yerr=std_array, label=f&quot;Hep3B: {concentration}&quot;, fmt=&#39;-o&#39;, capsize=5)</span>
+
+                <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Time [d]&#39;</span><span class="p">)</span>
+                <span class="c1">#plt.ylabel(rf&#39;{self.plot_name_dict[name]}&#39;)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                <span class="c1">#plt.xlim(1, 21)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+            <span class="n">result_df</span> <span class="o">=</span> <span class="n">results_mean_df</span>
+
+        <span class="k">elif</span> <span class="n">plot</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&#39;&#39;&#39; additional Plot of Result &#39;&#39;&#39;</span>
+            <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">result_df</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+                <span class="k">if</span> <span class="n">skip_nan</span><span class="p">:</span>
+                    <span class="n">valid_indices</span> <span class="o">=</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">result_df</span><span class="p">[</span><span class="n">index</span><span class="p">])</span>
+                    <span class="c1"># Arrays filtern</span>
+                    <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result_df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">to_list</span><span class="p">())</span> <span class="o">/</span> <span class="mi">24</span><span class="p">)[</span><span class="n">valid_indices</span><span class="p">]</span>
+                    <span class="n">y</span> <span class="o">=</span> <span class="p">(</span><span class="n">result_df</span><span class="p">[</span><span class="n">index</span><span class="p">])[</span><span class="n">valid_indices</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result_df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">to_list</span><span class="p">())</span> <span class="o">/</span> <span class="mi">24</span><span class="p">)</span>
+                    <span class="n">y</span> <span class="o">=</span> <span class="p">(</span><span class="n">result_df</span><span class="p">[</span><span class="n">index</span><span class="p">])</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Time [d]&#39;</span><span class="p">)</span>
+            <span class="c1"># plt.ylabel(rf&#39;{self.plot_name_dict[name]}&#39;)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">21</span><span class="p">)</span>
+            <span class="c1">#plt.legend()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">result_df</span></div>
+
+
+        
+<div class="viewcode-block" id="Result.interactive">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.result.Result.interactive">[docs]</a>
+    <span class="k">def</span> <span class="nf">interactive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plot_anzahl</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Launch interactive visualization and analysis interface.</span>
+<span class="sd">        </span>
+<span class="sd">        Creates interactive widgets for:</span>
+<span class="sd">        - Browsing through wells and timepoints</span>
+<span class="sd">        - Viewing different imaging channels</span>
+<span class="sd">        - Performing manual and automated segmentation</span>
+<span class="sd">        - Visualizing analysis results</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            plot_anzahl: Number of image panels to display</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">wells_array</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:])))</span>
+        <span class="n">initial_well</span> <span class="o">=</span> <span class="n">wells_array</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">spheroid_series</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">initial_well</span><span class="p">]</span>
+
+        <span class="n">result_metric_array</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;radius&#39;</span><span class="p">,</span> <span class="s1">&#39;area&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span> <span class="o">=</span> <span class="s1">&#39;radius&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result_df_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="c1"># Methoden für Buttons</span>
+        <span class="k">def</span> <span class="nf">manual_segmentation</span><span class="p">(</span><span class="n">change</span><span class="p">):</span>
+            <span class="n">spheroid_series</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">well_pulldown</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
+            <span class="n">spheroid_image</span> <span class="o">=</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">[</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span><span class="p">]]</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">pass</span>
+                <span class="c1">#spheroid_image.segmentation_manual(&#39;brightfield&#39;)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;error!&#39;</span><span class="p">)</span>
+                <span class="c1">#spheroid_image.segmentation_manual(&#39;fluorescence_green&#39;)</span>
+
+        <span class="k">def</span> <span class="nf">thresholding_segmentation</span><span class="p">(</span><span class="n">change</span><span class="p">):</span>
+            <span class="n">spheroid_series</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">well_pulldown</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
+            <span class="n">spheroid_image</span> <span class="o">=</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">[</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span><span class="p">]]</span>
+            <span class="c1"># redo Segmentation</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span><span class="p">,</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour_touches_border</span> <span class="o">=</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">segmentation_thresholding</span><span class="p">(</span>
+                    <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="n">thresholding_input</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour_touches_border</span><span class="p">:</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">border_margin</span> <span class="o">=</span> <span class="mi">5</span>
+                        <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span> <span class="o">=</span> <span class="n">add_fitted_contour</span><span class="p">(</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span><span class="p">,</span>
+                                                                    <span class="n">fit_ellipse</span><span class="p">(</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+                                                                    <span class="n">spheroid_image</span><span class="o">.</span><span class="n">_width</span> <span class="o">-</span> <span class="n">border_margin</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>
+                                                                    <span class="n">spheroid_image</span><span class="o">.</span><span class="n">_height</span> <span class="o">-</span> <span class="n">border_margin</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>
+                                                                    <span class="n">border_margin</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">border_margin</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+                    <span class="k">except</span><span class="p">:</span>
+                        <span class="k">pass</span>
+                <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric_dfs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">result_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">result_df_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="c1"># save generated contour</span>
+                <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+                    <span class="n">spheroid_image_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="p">[</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">hdf5_key</span><span class="p">]</span>
+                    <span class="k">del</span> <span class="n">spheroid_image_group</span><span class="p">[</span><span class="s1">&#39;contour&#39;</span><span class="p">]</span>
+                    <span class="n">spheroid_image_group</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s1">&#39;contour&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="n">update_display</span><span class="p">()</span>
+
+        <span class="k">def</span> <span class="nf">ai_segmentation</span><span class="p">(</span><span class="n">change</span><span class="p">):</span>
+            <span class="n">spheroid_series</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">well_pulldown</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
+            <span class="n">spheroid_image</span> <span class="o">=</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">[</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span><span class="p">]]</span>
+            <span class="c1"># redo Segmentation</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span><span class="p">,</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour_touches_border</span> <span class="o">=</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">segmentation_detectron</span><span class="p">(</span><span class="s1">&#39;brightfield&#39;</span><span class="p">,</span> <span class="n">ai_input</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour_touches_border</span> <span class="ow">and</span> <span class="n">reconstruct_border</span><span class="p">:</span>
+                    <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span> <span class="o">=</span> <span class="n">add_fitted_contour</span><span class="p">(</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span><span class="p">,</span> <span class="n">fit_ellipse</span><span class="p">(</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+                                                      <span class="n">spheroid_image</span><span class="o">.</span><span class="n">_width</span> <span class="o">-</span> <span class="n">border_margin</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">_height</span> <span class="o">-</span> <span class="n">border_margin</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>
+                                                      <span class="n">border_margin</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">border_margin</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">result_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">result_df_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="c1"># save generated contour</span>
+                <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+                    <span class="n">spheroid_image_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="p">[</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">hdf5_key</span><span class="p">]</span>
+                    <span class="k">del</span> <span class="n">spheroid_image_group</span><span class="p">[</span><span class="s1">&#39;contour&#39;</span><span class="p">]</span>
+                    <span class="n">spheroid_image_group</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s1">&#39;contour&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="n">update_display</span><span class="p">()</span>
+
+        <span class="k">def</span> <span class="nf">delete_contour</span><span class="p">(</span><span class="n">change</span><span class="p">):</span>
+            <span class="n">spheroid_series</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">well_pulldown</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
+            <span class="n">spheroid_image</span> <span class="o">=</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">[</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span><span class="p">]]</span>
+            <span class="c1"># delete contour</span>
+            <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour_touches_border</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="c1"># remove contour from hdf5-file</span>
+            <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+                <span class="n">spheroid_image_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="p">[</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">hdf5_key</span><span class="p">]</span>
+                <span class="k">del</span> <span class="n">spheroid_image_group</span><span class="p">[</span><span class="s1">&#39;contour&#39;</span><span class="p">]</span>
+                <span class="n">spheroid_image_group</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s1">&#39;contour&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+
+            <span class="c1"># reload relevant metric</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">result_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">result_df_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">update_display</span><span class="p">()</span>
+
+        <span class="k">def</span> <span class="nf">delete_spheroid_image</span><span class="p">(</span><span class="n">change</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Spheroid image deleted.&quot;</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">handle_key</span><span class="p">(</span><span class="n">event</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;right&#39;</span><span class="p">:</span>
+                <span class="n">slider</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">relative_times</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">event</span><span class="o">.</span><span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;left&#39;</span><span class="p">:</span>
+                <span class="n">slider</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+<span class="w">        </span><span class="sd">&#39;&#39;&#39; Sort Timepoints &#39;&#39;&#39;</span>
+        <span class="nb">list</span><span class="p">(</span><span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">))</span>
+        <span class="n">relative_times</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">start_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">time_str</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">:</span>
+            <span class="n">current_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">time_str</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">)</span>
+            <span class="n">time_diff</span> <span class="o">=</span> <span class="n">current_time</span> <span class="o">-</span> <span class="n">start_time</span>
+            <span class="n">days</span> <span class="o">=</span> <span class="n">time_diff</span><span class="o">.</span><span class="n">days</span>
+            <span class="n">hours</span> <span class="o">=</span> <span class="n">time_diff</span><span class="o">.</span><span class="n">seconds</span> <span class="o">//</span> <span class="mi">3600</span>
+            <span class="n">relative_times</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">days</span><span class="si">}</span><span class="s2">d </span><span class="si">{</span><span class="n">hours</span><span class="si">}</span><span class="s2">h&quot;</span><span class="p">)</span>
+
+<span class="w">        </span><span class="sd">&#39;&#39;&#39; Layout &#39;&#39;&#39;</span>
+        <span class="n">slider</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">IntSlider</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">relative_times</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>
+                                   <span class="n">step</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                                   <span class="n">description</span><span class="o">=</span><span class="s1">&#39;Time&#39;</span><span class="p">,</span>
+                                   <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s1">&#39;70%&#39;</span><span class="p">))</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Label</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">relative_times</span><span class="p">[</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span><span class="p">])</span>
+        <span class="n">well_pulldown</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Dropdown</span><span class="p">(</span>
+            <span class="n">options</span><span class="o">=</span><span class="n">wells_array</span><span class="p">,</span>
+            <span class="n">description</span><span class="o">=</span><span class="s1">&#39;Well&#39;</span><span class="p">,</span>
+            <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s1">&#39;150px&#39;</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="n">outputs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">kanal_checkboxes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">dropdowns</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">plot_anzahl</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Output</span><span class="p">(</span><span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s1">&#39;95%&#39;</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="s1">&#39;300px&#39;</span><span class="p">))</span>
+            <span class="n">outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">plot_anzahl</span><span class="p">):</span>
+                <span class="n">dropdown</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Dropdown</span><span class="p">(</span>
+                    <span class="n">options</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;brightfield&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_green&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_red&#39;</span><span class="p">,</span> <span class="s1">&#39;fluorescence_blue&#39;</span><span class="p">],</span>
+                    <span class="n">description</span><span class="o">=</span><span class="s1">&#39;Channel&#39;</span><span class="p">,</span>
+                    <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s1">&#39;70%&#39;</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">dropdown</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Dropdown</span><span class="p">(</span>
+                    <span class="n">options</span><span class="o">=</span><span class="n">result_metric_array</span><span class="p">,</span>
+                    <span class="n">description</span><span class="o">=</span><span class="s1">&#39;Metric&#39;</span><span class="p">,</span>
+                    <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s1">&#39;70%&#39;</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="n">dropdown</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="k">lambda</span> <span class="n">change</span><span class="p">:</span> <span class="n">update_display</span><span class="p">(),</span> <span class="n">names</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+            <span class="n">dropdowns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dropdown</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">update_display</span><span class="p">():</span>
+            <span class="n">spheroid_series</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spheroid_dict</span><span class="p">[</span><span class="n">well_pulldown</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
+            <span class="n">spheroid_image</span> <span class="o">=</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">[</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span><span class="p">]]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">plot_anzahl</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>
+                <span class="k">with</span> <span class="n">outputs</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span>
+                    <span class="n">outputs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">clear_output</span><span class="p">(</span><span class="n">wait</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                    <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+                    <span class="k">for</span> <span class="n">spine</span> <span class="ow">in</span> <span class="n">ax</span><span class="o">.</span><span class="n">spines</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                        <span class="n">spine</span><span class="o">.</span><span class="n">set_edgecolor</span><span class="p">(</span><span class="s1">&#39;black&#39;</span><span class="p">)</span>
+                        <span class="n">spine</span><span class="o">.</span><span class="n">set_linewidth</span><span class="p">(</span><span class="mf">.5</span><span class="p">)</span>
+
+                    <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">plot_anzahl</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="n">dropdowns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">value</span> <span class="ow">in</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">image_path_dict</span><span class="p">:</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">cv2</span><span class="o">.</span><span class="n">cvtColor</span><span class="p">(</span><span class="n">cv2</span><span class="o">.</span><span class="n">imread</span><span class="p">(</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">image_path_dict</span><span class="p">[</span><span class="n">dropdowns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="p">]),</span>
+                                <span class="n">cv2</span><span class="o">.</span><span class="n">COLOR_BGR2RGB</span><span class="p">),</span> <span class="n">extent</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">image_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">image_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span>
+                            <span class="n">size_bar</span> <span class="o">=</span> <span class="n">AnchoredSizeBar</span><span class="p">(</span><span class="n">ax</span><span class="o">.</span><span class="n">transData</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="s1">&#39;300 µm&#39;</span><span class="p">,</span> <span class="s1">&#39;lower right&#39;</span><span class="p">,</span> <span class="n">pad</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;white&#39;</span><span class="p">,</span> <span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">size_vertical</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">borderpad</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">add_artist</span><span class="p">(</span><span class="n">size_bar</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="mi">800</span><span class="p">,</span><span class="mi">600</span><span class="p">,</span> <span class="s1">&#39;No Image&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">ha</span><span class="o">=</span><span class="s1">&#39;center&#39;</span><span class="p">,</span> <span class="n">va</span><span class="o">=</span><span class="s1">&#39;center&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">,</span><span class="n">alpha</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
+
+                        <span class="k">if</span> <span class="n">show_contour_checkbox</span><span class="o">.</span><span class="n">value</span> <span class="ow">and</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">spheroid_image</span><span class="o">.</span><span class="n">scaled_contour</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span>
+                                    <span class="n">spheroid_image</span><span class="o">.</span><span class="n">scaled_contour</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span>
+                                    <span class="n">color</span><span class="o">=</span><span class="s1">&#39;b&#39;</span><span class="p">)</span>
+                        <span class="n">label</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">relative_times</span><span class="p">[</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
+                        <span class="n">ax</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s1">&#39;off&#39;</span><span class="p">)</span>
+                        <span class="n">ax</span><span class="o">.</span><span class="n">set_aspect</span><span class="p">(</span><span class="s1">&#39;equal&#39;</span><span class="p">,</span> <span class="n">adjustable</span><span class="o">=</span><span class="s1">&#39;box&#39;</span><span class="p">)</span>
+                        <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">image_size</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                        <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">image_size</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">prolif_plot_checkbox</span><span class="o">.</span><span class="n">value</span><span class="p">:</span>
+                            <span class="k">if</span> <span class="n">dropdowns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">:</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span> <span class="o">=</span> <span class="n">dropdowns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">value</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">result_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">result_df_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metric</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">,</span> <span class="n">mean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+                            <span class="c1">#time_points = list(range(len(relative_times)))</span>
+                            <span class="c1">#proliferation_data = [i * 2 for i in time_points]</span>
+                            <span class="c1">#ax.plot(time_points, proliferation_data, label=&quot;Proliferation&quot;)</span>
+                            <span class="n">index</span> <span class="o">=</span> <span class="n">well_pulldown</span><span class="o">.</span><span class="n">value</span>
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span> <span class="o">==</span> <span class="s1">&#39;radius&#39;</span><span class="p">:</span>
+                                <span class="n">y_value</span> <span class="o">=</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">radius</span>
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span> <span class="o">==</span> <span class="s1">&#39;area&#39;</span><span class="p">:</span>
+                                <span class="n">y_value</span> <span class="o">=</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">area</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">to_list</span><span class="p">())</span> <span class="o">/</span> <span class="mi">24</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">result_df</span><span class="p">[</span><span class="n">index</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">contour</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                                <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">relative_time_array</span><span class="p">[</span><span class="n">slider</span><span class="o">.</span><span class="n">value</span><span class="p">]</span><span class="o">/</span><span class="mi">24</span><span class="p">,</span> <span class="n">y_value</span><span class="p">,</span> <span class="s1">&#39;ro&#39;</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>  <span class="c1"># &#39;ro&#39; steht für roten Punkt</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [d]&quot;</span><span class="p">)</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result_metric</span><span class="p">)</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+                            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="c1"># Alles unsichtbar machen</span>
+                            <span class="n">ax</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s1">&#39;off&#39;</span><span class="p">)</span>  <span class="c1"># Achsen ausschalten</span>
+                            <span class="n">fig</span><span class="o">.</span><span class="n">patch</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># Hintergrund des Plots unsichtbar machen</span>
+
+                            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+
+        <span class="n">slider</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="k">lambda</span> <span class="n">change</span><span class="p">:</span> <span class="n">update_display</span><span class="p">(),</span> <span class="n">names</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+        <span class="n">well_pulldown</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="k">lambda</span> <span class="n">change</span><span class="p">:</span> <span class="n">update_display</span><span class="p">(),</span> <span class="n">names</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">plot_anzahl</span><span class="p">):</span>
+            <span class="n">dropdowns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="k">lambda</span> <span class="n">change</span><span class="p">,</span> <span class="n">i</span><span class="o">=</span><span class="n">i</span><span class="p">:</span> <span class="n">update_display</span><span class="p">(),</span> <span class="n">names</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+
+        <span class="n">control_boxes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">plot_anzahl</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">control_box</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">VBox</span><span class="p">([</span><span class="n">dropdowns</span><span class="p">[</span><span class="n">i</span><span class="p">]],</span>
+                                       <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="s1">&#39;80px 0 0 0&#39;</span><span class="p">))</span>
+            <span class="n">control_boxes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">widgets</span><span class="o">.</span><span class="n">VBox</span><span class="p">([</span><span class="n">outputs</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">control_box</span><span class="p">]))</span>
+
+        <span class="n">plot_box</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">HBox</span><span class="p">(</span><span class="n">control_boxes</span><span class="p">,</span>
+                                <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">justify_content</span><span class="o">=</span><span class="s1">&#39;center&#39;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="s1">&#39;100%&#39;</span><span class="p">,</span> <span class="n">margin</span><span class="o">=</span><span class="s1">&#39;0 0 0px 0&#39;</span><span class="p">))</span>
+
+        <span class="n">slider_hbox</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">HBox</span><span class="p">([</span><span class="n">well_pulldown</span><span class="p">,</span> <span class="n">slider</span><span class="p">,</span> <span class="n">label</span><span class="p">],</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">align_items</span><span class="o">=</span><span class="s1">&#39;center&#39;</span><span class="p">))</span>
+
+        <span class="n">show_contour_checkbox</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Checkbox</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Contour&quot;</span><span class="p">,</span>
+                                                 <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">))</span>
+        <span class="n">show_contour_checkbox</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="k">lambda</span> <span class="n">change</span><span class="p">:</span> <span class="n">update_display</span><span class="p">(),</span> <span class="n">names</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+        <span class="n">segmentation_options_checkbox</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Checkbox</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Display Segmentation Options&quot;</span><span class="p">,</span>
+                                                         <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">))</span>
+        <span class="n">prolif_plot_checkbox</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Checkbox</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Show Proliferation Plot&quot;</span><span class="p">,</span>
+                                                <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">))</span>
+        <span class="n">delete_spheroid_button</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Button</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;Delete SpheroidImage&quot;</span><span class="p">,</span> <span class="n">on_click</span><span class="o">=</span><span class="n">delete_spheroid_image</span><span class="p">,</span>
+                                                <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="s1">&#39;0 50px 0 200px&#39;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="s1">&#39;200px&#39;</span><span class="p">))</span>
+        <span class="n">delete_spheroid_button</span><span class="o">.</span><span class="n">style</span><span class="o">.</span><span class="n">button_color</span> <span class="o">=</span> <span class="s1">&#39;red&#39;</span>
+
+        <span class="n">tickbox_and_delete_button</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">HBox</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">segmentation_options_checkbox</span><span class="p">,</span> <span class="n">show_contour_checkbox</span><span class="p">,</span> <span class="n">prolif_plot_checkbox</span><span class="p">,</span> <span class="n">delete_spheroid_button</span><span class="p">],</span>
+            <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="s1">&#39;0 0px 0 0&#39;</span><span class="p">))</span>
+
+        <span class="n">header</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Label</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="s2">&quot;Segmentation Options:&quot;</span><span class="p">,</span>
+                               <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">font_weight</span><span class="o">=</span><span class="s2">&quot;bold&quot;</span><span class="p">,</span> <span class="n">font_size</span><span class="o">=</span><span class="s2">&quot;16px&quot;</span><span class="p">,</span> <span class="n">margin</span><span class="o">=</span><span class="s1">&#39;5px 0&#39;</span><span class="p">))</span>
+        <span class="n">manual_button</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Button</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;Manual&quot;</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="s1">&#39;0 10px&#39;</span><span class="p">))</span>
+        <span class="n">thresholding_button</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Button</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;Thresholding&quot;</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="s1">&#39;0 10px&#39;</span><span class="p">))</span>
+        <span class="n">thresholding_input</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">FloatText</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s1">&#39;80px&#39;</span><span class="p">))</span>
+        <span class="n">thresholding_input</span><span class="o">.</span><span class="n">step</span> <span class="o">=</span> <span class="mf">0.1</span>
+        <span class="n">ai_button</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Button</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;AI&quot;</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="s1">&#39;0 10px&#39;</span><span class="p">))</span>
+        <span class="n">ai_input</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">FloatText</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="s1">&#39;80px&#39;</span><span class="p">))</span>
+        <span class="n">ai_input</span><span class="o">.</span><span class="n">step</span> <span class="o">=</span> <span class="mf">0.05</span>
+        <span class="n">delete_contour_button</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Button</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;Delete Contour&quot;</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="s1">&#39;0 10px&#39;</span><span class="p">))</span>
+        <span class="n">delete_contour_button</span><span class="o">.</span><span class="n">style</span><span class="o">.</span><span class="n">button_color</span> <span class="o">=</span> <span class="s1">&#39;coral&#39;</span>
+
+        <span class="n">manual_button</span><span class="o">.</span><span class="n">on_click</span><span class="p">(</span><span class="n">manual_segmentation</span><span class="p">)</span>
+        <span class="n">thresholding_button</span><span class="o">.</span><span class="n">on_click</span><span class="p">(</span><span class="n">thresholding_segmentation</span><span class="p">)</span>
+        <span class="n">ai_button</span><span class="o">.</span><span class="n">on_click</span><span class="p">(</span><span class="n">ai_segmentation</span><span class="p">)</span>
+        <span class="n">delete_contour_button</span><span class="o">.</span><span class="n">on_click</span><span class="p">(</span><span class="n">delete_contour</span><span class="p">)</span>
+
+        <span class="n">segmentation_buttons</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">HBox</span><span class="p">([</span>
+            <span class="n">header</span><span class="p">,</span>
+            <span class="n">manual_button</span><span class="p">,</span>
+            <span class="n">widgets</span><span class="o">.</span><span class="n">HBox</span><span class="p">([</span><span class="n">thresholding_button</span><span class="p">,</span> <span class="n">thresholding_input</span><span class="p">]),</span>
+            <span class="n">widgets</span><span class="o">.</span><span class="n">HBox</span><span class="p">([</span><span class="n">ai_button</span><span class="p">,</span> <span class="n">ai_input</span><span class="p">]),</span>
+            <span class="n">delete_contour_button</span>
+        <span class="p">],</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">justify_content</span><span class="o">=</span><span class="s1">&#39;center&#39;</span><span class="p">,</span> <span class="n">margin</span><span class="o">=</span><span class="s1">&#39;0px 0&#39;</span><span class="p">))</span>
+
+        <span class="k">def</span> <span class="nf">toggle_segmentation_buttons</span><span class="p">(</span><span class="n">change</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">change</span><span class="o">.</span><span class="n">new</span><span class="p">:</span>
+                <span class="n">segmentation_buttons_box</span><span class="o">.</span><span class="n">children</span> <span class="o">=</span> <span class="p">[</span><span class="n">tickbox_and_delete_button</span><span class="p">,</span> <span class="n">segmentation_buttons</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">segmentation_buttons_box</span><span class="o">.</span><span class="n">children</span> <span class="o">=</span> <span class="p">[</span><span class="n">tickbox_and_delete_button</span><span class="p">]</span>
+
+        <span class="n">segmentation_options_checkbox</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="n">toggle_segmentation_buttons</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+        <span class="n">segmentation_buttons_box</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">VBox</span><span class="p">([</span><span class="n">tickbox_and_delete_button</span><span class="p">],</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="s1">&#39;5px 0 0 0&#39;</span><span class="p">))</span>
+
+
+        <span class="n">prolif_plot_checkbox</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="k">lambda</span> <span class="n">change</span><span class="p">:</span> <span class="n">update_display</span><span class="p">(),</span> <span class="n">names</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+
+        <span class="n">complete_display</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">VBox</span><span class="p">([</span>
+            <span class="n">slider_hbox</span><span class="p">,</span>
+            <span class="n">plot_box</span><span class="p">,</span>
+            <span class="n">segmentation_buttons_box</span>
+        <span class="p">],</span> <span class="n">layout</span><span class="o">=</span><span class="n">widgets</span><span class="o">.</span><span class="n">Layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="s1">&#39;0 0 0px 0&#39;</span><span class="p">))</span>
+
+        <span class="n">display</span><span class="p">(</span><span class="n">complete_display</span><span class="p">)</span>
+        <span class="n">update_display</span><span class="p">()</span></div>
+
+
+    <span class="k">def</span> <span class="nf">__results_mean</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dict_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="n">df_results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_df_dict</span><span class="p">[</span><span class="n">dict_key</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">platemap</span><span class="o">.</span><span class="n">replicates</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+            <span class="n">condition</span> <span class="o">=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">key</span><span class="p">])</span>
+            <span class="n">wells_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">platemap</span><span class="o">.</span><span class="n">replicates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+            <span class="n">valid_wells</span> <span class="o">=</span> <span class="p">[</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">wells_list</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">df_results</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">results_mean_df</span><span class="p">[(</span><span class="n">condition</span><span class="p">,</span> <span class="s1">&#39;mean&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="n">df_results</span><span class="p">[</span><span class="n">valid_wells</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">results_mean_df</span><span class="p">[(</span><span class="n">condition</span><span class="p">,</span> <span class="s1">&#39;std&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="n">df_results</span><span class="p">[</span><span class="n">valid_wells</span><span class="p">]</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="n">results_mean_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+                    <span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="s1">&#39;mean&#39;</span><span class="p">):</span> <span class="n">df_results</span><span class="p">[</span><span class="n">valid_wells</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                    <span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="s1">&#39;std&#39;</span><span class="p">):</span> <span class="n">df_results</span><span class="p">[</span><span class="n">valid_wells</span><span class="p">]</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="p">})</span>
+        <span class="k">return</span> <span class="n">results_mean_df</span>
+
+    <span class="c1">#todo</span>
+    <span class="k">def</span> <span class="nf">_worksheet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">workbook</span><span class="p">:</span> <span class="n">Workbook</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Workbook</span><span class="p">:</span>
+        <span class="k">pass</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Cedric Heuermann.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

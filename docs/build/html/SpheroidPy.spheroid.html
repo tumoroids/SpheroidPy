@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpheroidPy.spheroid package &mdash; SpheroidPy 0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=17bff7d0" />
+
+  
+    <link rel="shortcut icon" href="_static/SpheroidPy_logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=2709fde1"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="SpheroidPy.utils package" href="SpheroidPy.utils.html" />
+    <link rel="prev" title="SpheroidPy.experiment package" href="SpheroidPy.experiment.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html">
+            
+              <img src="_static/SpheroidPy_logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user_manual.html">User Manual</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="SpheroidPy.html">SpheroidPy package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="SpheroidPy.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="SpheroidPy.experiment.html">SpheroidPy.experiment package</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">SpheroidPy.spheroid package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#spheroidpy-spheroid-spheroid-module">SpheroidPy.spheroid.spheroid module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-SpheroidPy.spheroid.spheroid_collection">SpheroidPy.spheroid.spheroid_collection module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-SpheroidPy.spheroid.spheroid_image">SpheroidPy.spheroid.spheroid_image module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-SpheroidPy.spheroid.spheroid_series">SpheroidPy.spheroid.spheroid_series module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-SpheroidPy.spheroid">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="SpheroidPy.utils.html">SpheroidPy.utils package</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="SpheroidPy.html#module-SpheroidPy">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">SpheroidPy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="SpheroidPy.html">SpheroidPy package</a></li>
+      <li class="breadcrumb-item active">SpheroidPy.spheroid package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/SpheroidPy.spheroid.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="spheroidpy-spheroid-package">
+<h1>SpheroidPy.spheroid package<a class="headerlink" href="#spheroidpy-spheroid-package" title="Link to this heading"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading"></a></h2>
+</section>
+<section id="spheroidpy-spheroid-spheroid-module">
+<h2>SpheroidPy.spheroid.spheroid module<a class="headerlink" href="#spheroidpy-spheroid-spheroid-module" title="Link to this heading"></a></h2>
+</section>
+<section id="module-SpheroidPy.spheroid.spheroid_collection">
+<span id="spheroidpy-spheroid-spheroid-collection-module"></span><h2>SpheroidPy.spheroid.spheroid_collection module<a class="headerlink" href="#module-SpheroidPy.spheroid.spheroid_collection" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">SpheroidPy.spheroid.spheroid_collection.</span></span><span class="sig-name descname"><span class="pre">SpheroidCollection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spheroid_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries" title="SpheroidPy.spheroid.spheroid_series.SpheroidSeries"><span class="pre">SpheroidSeries</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="SpheroidPy.experiment.html#SpheroidPy.experiment.result.Result" title="SpheroidPy.experiment.result.Result"><span class="pre">Result</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hdf5_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Collection of spheroid series representing biological replicates.</p>
+<p>Groups spheroids from the same experimental condition across different
+Results/replicates and provides methods for analysis.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.name">
+<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.name" title="Link to this definition"></a></dt>
+<dd><p>Name of the condition this collection represents</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.replicate_dict">
+<span class="sig-name descname"><span class="pre">replicate_dict</span></span><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.replicate_dict" title="Link to this definition"></a></dt>
+<dd><p>Maps dates to lists of spheroid series</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.replicate_metadata">
+<span class="sig-name descname"><span class="pre">replicate_metadata</span></span><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.replicate_metadata" title="Link to this definition"></a></dt>
+<dd><p>Maps spheroid series names to replicate info</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.ignored_spheroids">
+<span class="sig-name descname"><span class="pre">ignored_spheroids</span></span><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.ignored_spheroids" title="Link to this definition"></a></dt>
+<dd><p>Set of spheroid series names to exclude</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.time_periods">
+<span class="sig-name descname"><span class="pre">time_periods</span></span><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.time_periods" title="Link to this definition"></a></dt>
+<dd><p>Maps time period names to (hours_start, hours_end) tuples</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.active_period">
+<span class="sig-name descname"><span class="pre">active_period</span></span><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.active_period" title="Link to this definition"></a></dt>
+<dd><p>Currently active time period name</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.add_replicate_group">
+<span class="sig-name descname"><span class="pre">add_replicate_group</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spheroid_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries" title="SpheroidPy.spheroid.spheroid_series.SpheroidSeries"><span class="pre">SpheroidSeries</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="SpheroidPy.experiment.html#SpheroidPy.experiment.result.Result" title="SpheroidPy.experiment.result.Result"><span class="pre">Result</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection.add_replicate_group"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.add_replicate_group" title="Link to this definition"></a></dt>
+<dd><p>Add a group of spheroid series from a Result as replicates.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spheroid_list</strong> – List of SpheroidSeries to add</p></li>
+<li><p><strong>result</strong> – Result these spheroids came from</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ValueError</strong> – If spheroid_list is empty</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.add_time_period">
+<span class="sig-name descname"><span class="pre">add_time_period</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relative</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">absolute</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">datetime</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">datetime</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection.add_time_period"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.add_time_period" title="Link to this definition"></a></dt>
+<dd><p>Add a named time period for analysis.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> – Name for the time period</p></li>
+<li><p><strong>relative</strong> – Optional (start_hours, end_hours) from replicate start</p></li>
+<li><p><strong>absolute</strong> – Optional dict mapping result_names to (start_date, end_date)</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p># Relative time (24-48h from each replicate’s start)
+collection.add_time_period(“day2”, relative=(24, 48))</p>
+<p># Absolute dates (different for each result)
+collection.add_time_period(“phase1”, absolute={</p>
+<blockquote>
+<div><p>‘Day1_Result’: (‘2024-01-01’, ‘2024-01-02’),
+‘Day2_Result’: (‘2024-01-02’, ‘2024-01-03’)</p>
+</div></blockquote>
+<p>})</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.get_active_spheroids">
+<span class="sig-name descname"><span class="pre">get_active_spheroids</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">result</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="SpheroidPy.experiment.html#SpheroidPy.experiment.result.Result" title="SpheroidPy.experiment.result.Result"><span class="pre">Result</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries" title="SpheroidPy.spheroid.spheroid_series.SpheroidSeries"><span class="pre">SpheroidSeries</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection.get_active_spheroids"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.get_active_spheroids" title="Link to this definition"></a></dt>
+<dd><p>Get list of active spheroids, filtered by time period if set.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.get_replicate_stats">
+<span class="sig-name descname"><span class="pre">get_replicate_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection.get_replicate_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.get_replicate_stats" title="Link to this definition"></a></dt>
+<dd><p>Get statistics about replicates in collection.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>result_name: Name of Result</p></li>
+<li><p>replicate_number: Number within that Result</p></li>
+<li><p>num_spheroids: Number of spheroid series</p></li>
+<li><p>num_active: Number not ignored</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame with columns</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.ignore_spheroid">
+<span class="sig-name descname"><span class="pre">ignore_spheroid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spheroid_series_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection.ignore_spheroid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.ignore_spheroid" title="Link to this definition"></a></dt>
+<dd><p>Mark a spheroid series as ignored for analysis.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.merge_collection">
+<span class="sig-name descname"><span class="pre">merge_collection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other_collection</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection" title="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection"><span class="pre">SpheroidCollection</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection.merge_collection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.merge_collection" title="Link to this definition"></a></dt>
+<dd><p>Merge another SpheroidCollection into this one.</p>
+<p>Combines spheroids while maintaining condition grouping and replicate tracking.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>other_collection</strong> – SpheroidCollection to merge into this one</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ValueError</strong> – If collections have different conditions</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.segmentation">
+<span class="sig-name descname"><span class="pre">segmentation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">segmentation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">('thresholding',</span> <span class="pre">'fluorescence_green')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reconstruct_border</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection.segmentation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.segmentation" title="Link to this definition"></a></dt>
+<dd><p>Perform segmentation on all active spheroids.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.set_active_period">
+<span class="sig-name descname"><span class="pre">set_active_period</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">period_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection.set_active_period"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.set_active_period" title="Link to this definition"></a></dt>
+<dd><p>Set which time period to use for analysis.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>period_name</strong> – Name of period to activate, or None to clear</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.unignore_spheroid">
+<span class="sig-name descname"><span class="pre">unignore_spheroid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spheroid_series_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#SpheroidCollection.unignore_spheroid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.SpheroidCollection.unignore_spheroid" title="Link to this definition"></a></dt>
+<dd><p>Remove a spheroid series from the ignored list.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.TimeWindow">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">SpheroidPy.spheroid.spheroid_collection.</span></span><span class="sig-name descname"><span class="pre">TimeWindow</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relative</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">absolute</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">datetime</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">datetime</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#TimeWindow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.TimeWindow" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Represents a time window for analysis that can be relative or absolute.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_collection.TimeWindow.filter_timepoints">
+<span class="sig-name descname"><span class="pre">filter_timepoints</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spheroid</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries" title="SpheroidPy.spheroid.spheroid_series.SpheroidSeries"><span class="pre">SpheroidSeries</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">result_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_collection.html#TimeWindow.filter_timepoints"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_collection.TimeWindow.filter_timepoints" title="Link to this definition"></a></dt>
+<dd><p>Filter spheroid timepoints based on time window.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spheroid</strong> – SpheroidSeries to filter</p></li>
+<li><p><strong>result_name</strong> – Name of result this spheroid is from</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered spheroid_image_dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-SpheroidPy.spheroid.spheroid_image">
+<span id="spheroidpy-spheroid-spheroid-image-module"></span><h2>SpheroidPy.spheroid.spheroid_image module<a class="headerlink" href="#module-SpheroidPy.spheroid.spheroid_image" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">SpheroidPy.spheroid.spheroid_image.</span></span><span class="sig-name descname"><span class="pre">SpheroidImage</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">brightfield</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A class for analyzing and processing images of spheroids.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.area">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">area</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.area" title="Link to this definition"></a></dt>
+<dd><p>Calculate the area enclosed by the spheroid contour.</p>
+<p>Uses the shoelace formula to compute the area enclosed by the contour,
+scaled to physical units (μm²).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Area in μm² if contour exists, None otherwise</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.brightfield">
+<span class="sig-name descname"><span class="pre">brightfield</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.brightfield"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.brightfield" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.diffusion_stationary">
+<span class="sig-name descname"><span class="pre">diffusion_stationary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boundary_value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diffusion_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reaction_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_full</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">accuracy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.diffusion_stationary"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.diffusion_stationary" title="Link to this definition"></a></dt>
+<dd><p>Solve the stationary diffusion-reaction equation for the spheroid.</p>
+<p>Solves ∇⋅(D∇c)-kc=0 using finite element method, where:
+- c is concentration
+- D is diffusion coefficient
+- k is reaction rate</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>boundary_value</strong> – Concentration at spheroid boundary</p></li>
+<li><p><strong>diffusion_rate</strong> – Diffusion coefficient in μm²/s</p></li>
+<li><p><strong>reaction_rate</strong> – Reaction rate in mol/μm²/s</p></li>
+<li><p><strong>plot</strong> – Whether to display solution plot</p></li>
+<li><p><strong>plot_full</strong> – Whether to show full solution field</p></li>
+<li><p><strong>accuracy</strong> – Mesh resolution parameter</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>(points, triangles, solution) where:</dt><dd><p>points: Mesh vertex coordinates
+triangles: Mesh connectivity
+solution: Concentration values at mesh points</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.fluorescence">
+<span class="sig-name descname"><span class="pre">fluorescence</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">color</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.fluorescence"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.fluorescence" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.functional_radius">
+<span class="sig-name descname"><span class="pre">functional_radius</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">live_color</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'green'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">death_color</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'red'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.functional_radius"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.functional_radius" title="Link to this definition"></a></dt>
+<dd><p>Calculate functional radii based on fluorescence profiles.</p>
+<p>Uses fluorescence intensity profiles to determine:
+- Outer radius (total spheroid size)
+- Inhibited radius (where cell growth is impaired)
+- Necrotic radius (where cells are dead/dying)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>live_color</strong> – Color channel for live cell marker</p></li>
+<li><p><strong>death_color</strong> – Color channel for dead cell marker</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>outer: Total spheroid radius in μm
+inhibited: Radius where growth inhibition begins
+necrotic: Radius where necrosis begins</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dictionary containing</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.mesh">
+<span class="sig-name descname"><span class="pre">mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">max_area</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">500</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">accuracy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.mesh" title="Link to this definition"></a></dt>
+<dd><p>Generate a triangular mesh of the spheroid contour.</p>
+<p>Uses MeshPy to create a triangulation of the region enclosed by the contour.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>max_area</strong> – Maximum allowed area for triangles in the mesh</p></li>
+<li><p><strong>plot</strong> – Whether to display a plot of the generated mesh</p></li>
+<li><p><strong>accuracy</strong> – Sample every nth point from contour for mesh generation</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(points, triangles) where points is an array of vertex coordinates
+and triangles is an array of triangle vertex indices</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.metric_fluorescence">
+<span class="sig-name descname"><span class="pre">metric_fluorescence</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fluorescence_color</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'green'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_border</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.metric_fluorescence"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.metric_fluorescence" title="Link to this definition"></a></dt>
+<dd><p>Calculate fluorescence intensity metrics within the spheroid contour.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fluorescence_color</strong> – Color channel to analyze (‘green’, ‘red’, ‘blue’)</p></li>
+<li><p><strong>ignore_border</strong> – Whether to proceed if spheroid touches image border</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of (cumulative intensity, mean intensity) or (None, None) if invalid</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.radial_profile">
+<span class="sig-name descname"><span class="pre">radial_profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angle_step</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.radial_profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.radial_profile" title="Link to this definition"></a></dt>
+<dd><p>Calculate the radial intensity profile of the spheroid.</p>
+<p>Measures fluorescence intensity along radial lines from the center
+to the boundary at regular angular intervals.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>plot</strong> – Whether to display a plot of the profiles</p></li>
+<li><p><strong>angle_step</strong> – Angular step size in degrees between measurements</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p>mean_radius: Average radius of the spheroid
+intensity_profiles: Dictionary of normalized intensity profiles</p>
+<blockquote>
+<div><p>for each fluorescence channel</p>
+</div></blockquote>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dictionary containing</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.radius">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">radius</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.radius" title="Link to this definition"></a></dt>
+<dd><p>Calculate the effective radius of the spheroid.</p>
+<p>Computes radius as r_eff = sqrt(Area/π), giving the radius of a circle
+with equivalent area to the spheroid.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Effective radius in μm if valid contour exists, None otherwise</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.scaled_contour">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">scaled_contour</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ndarray</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.scaled_contour" title="Link to this definition"></a></dt>
+<dd><p>Get the contour scaled to physical coordinates.</p>
+<p>Converts contour from pixel coordinates to physical coordinates (μm)
+based on the image size.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Array of shape (N,2) containing scaled (x,y) contour coordinates in μm</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation">
+<span class="sig-name descname"><span class="pre">segmentation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">segmentation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">('thresholding',</span> <span class="pre">'fluorescence_green')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reconstruct_border</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">border_margin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.segmentation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation" title="Link to this definition"></a></dt>
+<dd><p>Segment the spheroid using specified method and channel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>segmentation</strong> – Tuple of (method, channel) where method is either
+‘thresholding’ or ‘ai’, and channel specifies which image to use</p></li>
+<li><p><strong>reconstruct_border</strong> – Whether to reconstruct spheroid border when it
+extends beyond image bounds</p></li>
+<li><p><strong>border_margin</strong> – Margin in pixels to use when detecting border contact</p></li>
+</ul>
+</dd>
+</dl>
+<p>The segmentation result is stored in self.contour and self.contour_touches_border.
+If segmentation fails with the specified method, falls back to AI segmentation
+on brightfield image.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation_detectron">
+<span class="sig-name descname"><span class="pre">segmentation_detectron</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thres</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.65</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.segmentation_detectron"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation_detectron" title="Link to this definition"></a></dt>
+<dd><p>Segment spheroid using Detectron2 instance segmentation model.</p>
+<p>Uses a pre-trained Mask R-CNN model to detect and segment the spheroid.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>channel</strong> – Image channel to use for segmentation</p></li>
+<li><p><strong>thres</strong> – Detection confidence threshold</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(contour, touches_border) where contour is array of boundary points
+and touches_border indicates if spheroid extends beyond image bounds</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation_manual">
+<span class="sig-name descname"><span class="pre">segmentation_manual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.segmentation_manual"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation_manual" title="Link to this definition"></a></dt>
+<dd><p>Image segmentation function to create a custom polygon mask, and evalute radius and position of the masked object.
+Need to use %matplotlib qt in jupyter notebook
+:param img: Grayscale image as a Numpy array
+:type img: array</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dictionary with keys: mask, radius, centroid (x/y)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation_thresholding">
+<span class="sig-name descname"><span class="pre">segmentation_thresholding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thres</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.35</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thres_yen</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">border_margin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.segmentation_thresholding"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation_thresholding" title="Link to this definition"></a></dt>
+<dd><p>Image segmentation function to create spheroid mask, radius, and position of a spheroid in a grayscale image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>img</strong> (<em>array</em>) – Grayscale image as a Numpy array</p></li>
+<li><p><strong>thres</strong> (<em>float</em>) – To adjust the segmentation</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary with keys: mask, radius, centroid (x/y)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation_unet">
+<span class="sig-name descname"><span class="pre">segmentation_unet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thres</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.8</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_image.html#SpheroidImage.segmentation_unet"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage.segmentation_unet" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-SpheroidPy.spheroid.spheroid_series">
+<span id="spheroidpy-spheroid-spheroid-series-module"></span><h2>SpheroidPy.spheroid.spheroid_series module<a class="headerlink" href="#module-SpheroidPy.spheroid.spheroid_series" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">SpheroidPy.spheroid.spheroid_series.</span></span><span class="sig-name descname"><span class="pre">SpheroidSeries</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conditions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_series.html#SpheroidSeries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.add_spheroid_image">
+<span class="sig-name descname"><span class="pre">add_spheroid_image</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spheroid</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#SpheroidPy.spheroid.spheroid_image.SpheroidImage" title="SpheroidPy.spheroid.spheroid_image.SpheroidImage"><span class="pre">SpheroidImage</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">timepoint</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">datetime</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_series.html#SpheroidSeries.add_spheroid_image"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.add_spheroid_image" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.crop_time">
+<span class="sig-name descname"><span class="pre">crop_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_series.html#SpheroidSeries.crop_time"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.crop_time" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>start_time</strong></p></li>
+<li><p><strong>end_time</strong></p></li>
+<li><p><strong>reset</strong></p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.cropped_size">
+<span class="sig-name descname"><span class="pre">cropped_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.cropped_size" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.cropped_size_dict">
+<span class="sig-name descname"><span class="pre">cropped_size_dict</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.cropped_size_dict" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.cropped_time">
+<span class="sig-name descname"><span class="pre">cropped_time</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.cropped_time" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.cropped_time_array">
+<span class="sig-name descname"><span class="pre">cropped_time_array</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.cropped_time_array" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.export_video">
+<span class="sig-name descname"><span class="pre">export_video</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'brightfield'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overlay_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">increases</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">video_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'test.mp4'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scalebar</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">contour</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_out_of_contour</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diffusion_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_series.html#SpheroidSeries.export_video"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.export_video" title="Link to this definition"></a></dt>
+<dd><p>Exports the spheroid series images to a video.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>parent_folder</strong></p></li>
+<li><p><strong>channel</strong> – Channel to export (default: brightfield)</p></li>
+<li><p><strong>overlay</strong> – other channels/contours/fields, that get overlayed (default: none)</p></li>
+<li><p><strong>format</strong> – format of the video (default: ???)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.interactive">
+<span class="sig-name descname"><span class="pre">interactive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plot_anzahl</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/SpheroidPy/spheroid/spheroid_series.html#SpheroidSeries.interactive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.interactive" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>plot_anzahl</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.name">
+<span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.name" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.spheroid_image_dict">
+<span class="sig-name descname"><span class="pre">spheroid_image_dict</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.spheroid_image_dict" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.spheroid_image_dict_">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">spheroid_image_dict_</span></span><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.spheroid_image_dict_" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="SpheroidPy.spheroid.spheroid_series.SpheroidSeries.timepoints_array">
+<span class="sig-name descname"><span class="pre">timepoints_array</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span></em><a class="headerlink" href="#SpheroidPy.spheroid.spheroid_series.SpheroidSeries.timepoints_array" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-SpheroidPy.spheroid">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-SpheroidPy.spheroid" title="Link to this heading"></a></h2>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="SpheroidPy.experiment.html" class="btn btn-neutral float-left" title="SpheroidPy.experiment package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="SpheroidPy.utils.html" class="btn btn-neutral float-right" title="SpheroidPy.utils package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Cedric Heuermann.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

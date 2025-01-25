@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpheroidPy.experiment.analysis &mdash; SpheroidPy 0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=17bff7d0" />
+
+  
+    <link rel="shortcut icon" href="../../../_static/SpheroidPy_logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=2709fde1"></script>
+        <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html">
+            
+              <img src="../../../_static/SpheroidPy_logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_manual.html">User Manual</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../SpheroidPy.html">SpheroidPy package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">SpheroidPy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">SpheroidPy.experiment.analysis</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for SpheroidPy.experiment.analysis</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">import</span> <span class="nn">h5py</span>
+
+<span class="kn">from</span> <span class="nn">SpheroidPy.experiment.base</span> <span class="kn">import</span> <span class="n">Base</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.spheroid.spheroid_collection</span> <span class="kn">import</span> <span class="n">SpheroidCollection</span>
+
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">SpheroidPy.experiment.result</span> <span class="kn">import</span> <span class="n">Result</span>
+    <span class="kn">from</span> <span class="nn">SpheroidPy.experiment.experiment</span> <span class="kn">import</span> <span class="n">Experiment</span>
+    <span class="kn">from</span> <span class="nn">SpheroidPy.spheroid.spheroid_collection</span> <span class="kn">import</span> <span class="n">SpheroidCollection</span>
+
+<div class="viewcode-block" id="Analysis">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis">[docs]</a>
+<span class="k">class</span> <span class="nc">Analysis</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Class for orchestrating analyses across multiple experimental results.</span>
+<span class="sd">    </span>
+<span class="sd">    Handles biological replicates and coordinates analysis methods implemented</span>
+<span class="sd">    in SpheroidImage across multiple Results.</span>
+<span class="sd">    </span>
+<span class="sd">    Attributes:</span>
+<span class="sd">        name: Name of the analysis</span>
+<span class="sd">        replicates_dict: Maps condition names to lists of replicate Results</span>
+<span class="sd">        analysis_results: Stores computed metrics and analyses</span>
+<span class="sd">        config: Configuration parameters for analyses</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">experiment</span><span class="p">:</span> <span class="n">Experiment</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize Analysis instance.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            name: Name of the analysis</span>
+<span class="sd">            experiment: Parent Experiment instance</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Initialize base class first</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">experiment</span><span class="p">,</span> <span class="s1">&#39;Analysis&#39;</span><span class="p">)</span>
+        
+        <span class="c1"># Initialize instance attributes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># Maps conditions to SpheroidCollections</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># List of added Result objects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">analysis_results</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">time_periods</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># {period_name: TimeWindow}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">active_period</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="Analysis.add_replicate">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.add_replicate">[docs]</a>
+    <span class="k">def</span> <span class="nf">add_replicate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">:</span> <span class="n">Result</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add a Result as a biological replicate.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            result: Result to add as replicate</span>
+<span class="sd">            name: Optional name for the replicate group</span>
+<span class="sd">            </span>
+<span class="sd">        Saves replicate information to HDF5 file structure:</span>
+<span class="sd">        /Analysis/{index}-{name}/replicates/</span>
+<span class="sd">            ├── results/</span>
+<span class="sd">            │   └── {result_name}</span>
+<span class="sd">            └── conditions/</span>
+<span class="sd">                └── {condition}/</span>
+<span class="sd">                    ├── name</span>
+<span class="sd">                    ├── spheroid_list</span>
+<span class="sd">                    └── metadata</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">result_replicates</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">replicates</span>
+        <span class="n">replicate_name</span> <span class="o">=</span> <span class="n">name</span> <span class="k">if</span> <span class="n">name</span> <span class="k">else</span> <span class="n">result</span><span class="o">.</span><span class="n">name</span>
+
+        <span class="c1"># Track the added Result</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+        <span class="c1"># Add/merge SpheroidCollections by condition</span>
+        <span class="k">for</span> <span class="n">condition</span><span class="p">,</span> <span class="n">spheroid_collection</span> <span class="ow">in</span> <span class="n">result_replicates</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">condition</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span> <span class="o">=</span> <span class="n">SpheroidCollection</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">condition</span><span class="p">,</span>
+                    <span class="n">hdf5_path</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span>
+                <span class="p">)</span>
+            <span class="n">active_spheroids</span> <span class="o">=</span> <span class="n">spheroid_collection</span><span class="o">.</span><span class="n">get_active_spheroids</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span><span class="o">.</span><span class="n">add_replicate_group</span><span class="p">(</span><span class="n">active_spheroids</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+
+        <span class="c1"># Save to HDF5</span>
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="n">analysis_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_key</span><span class="p">]</span>
+            
+            <span class="c1"># Create groups if needed</span>
+            <span class="k">if</span> <span class="s1">&#39;replicates&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">analysis_group</span><span class="p">:</span>
+                <span class="n">replicates_group</span> <span class="o">=</span> <span class="n">analysis_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s1">&#39;replicates&#39;</span><span class="p">)</span>
+                <span class="n">results_group</span> <span class="o">=</span> <span class="n">replicates_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s1">&#39;results&#39;</span><span class="p">)</span>
+                <span class="n">conditions_group</span> <span class="o">=</span> <span class="n">replicates_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s1">&#39;conditions&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">replicates_group</span> <span class="o">=</span> <span class="n">analysis_group</span><span class="p">[</span><span class="s1">&#39;replicates&#39;</span><span class="p">]</span>
+                <span class="n">results_group</span> <span class="o">=</span> <span class="n">replicates_group</span><span class="p">[</span><span class="s1">&#39;results&#39;</span><span class="p">]</span>
+                <span class="n">conditions_group</span> <span class="o">=</span> <span class="n">replicates_group</span><span class="p">[</span><span class="s1">&#39;conditions&#39;</span><span class="p">]</span>
+
+            <span class="c1"># Save result reference</span>
+            <span class="n">result_ref</span> <span class="o">=</span> <span class="n">results_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">result_ref</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;date_added&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">)</span>
+            <span class="n">result_ref</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;hdf5_key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">hdf5_key</span>
+            
+            <span class="c1"># Save conditions and their spheroid collections</span>
+            <span class="k">for</span> <span class="n">condition</span><span class="p">,</span> <span class="n">collections</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">condition</span> <span class="o">==</span> <span class="s1">&#39;results&#39;</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                    
+                <span class="c1"># Create or get condition group</span>
+                <span class="k">if</span> <span class="n">condition</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">conditions_group</span><span class="p">:</span>
+                    <span class="n">condition_group</span> <span class="o">=</span> <span class="n">conditions_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">condition_group</span> <span class="o">=</span> <span class="n">conditions_group</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span>
+                
+                <span class="c1"># Save collection metadata</span>
+                <span class="k">for</span> <span class="n">collection</span> <span class="ow">in</span> <span class="n">collections</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">collection</span><span class="p">,</span> <span class="n">SpheroidCollection</span><span class="p">):</span>
+                        <span class="n">collection_group</span> <span class="o">=</span> <span class="n">condition_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;collection_</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">condition_group</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        
+                        <span class="c1"># Save basic info</span>
+                        <span class="n">collection_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">name</span>
+                        <span class="n">collection_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;result&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">name</span>
+                        <span class="n">collection_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;date_added&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span>
+                            <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">)</span>
+                        
+                        <span class="c1"># Save ignored spheroids</span>
+                        <span class="k">if</span> <span class="n">collection</span><span class="o">.</span><span class="n">ignored_spheroids</span><span class="p">:</span>
+                            <span class="n">ignored_ds</span> <span class="o">=</span> <span class="n">collection_group</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span>
+                                <span class="s1">&#39;ignored_spheroids&#39;</span><span class="p">,</span>
+                                <span class="n">data</span><span class="o">=</span><span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">collection</span><span class="o">.</span><span class="n">ignored_spheroids</span><span class="p">]</span>
+                            <span class="p">)</span>
+                        
+                        <span class="c1"># Save spheroid references</span>
+                        <span class="n">spheroids_group</span> <span class="o">=</span> <span class="n">collection_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s1">&#39;spheroids&#39;</span><span class="p">)</span>
+                        <span class="k">for</span> <span class="n">spheroid</span> <span class="ow">in</span> <span class="n">collection</span><span class="o">.</span><span class="n">get_active_spheroids</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
+                            <span class="n">spheroid_ref</span> <span class="o">=</span> <span class="n">spheroids_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="n">spheroid</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                            <span class="k">for</span> <span class="n">timepoint</span><span class="p">,</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">spheroid</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                                <span class="n">spheroid_ref</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="n">timepoint</span><span class="p">]</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">hdf5_key</span></div>
+
+
+<div class="viewcode-block" id="Analysis.analyze_functional_radii">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.analyze_functional_radii">[docs]</a>
+    <span class="k">def</span> <span class="nf">analyze_functional_radii</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">live_channel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                               <span class="n">death_channel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Analyze functional radii across all replicates.</span>
+<span class="sd">        </span>
+<span class="sd">        Computes outer, inhibited and necrotic radii for all spheroids</span>
+<span class="sd">        in each replicate group.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            live_channel: Override default live cell fluorescence channel</span>
+<span class="sd">            death_channel: Override default dead cell fluorescence channel</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            DataFrame containing functional radii measurements for all conditions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">live_ch</span> <span class="o">=</span> <span class="n">live_channel</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;live_channel&quot;</span><span class="p">]</span>
+        <span class="n">death_ch</span> <span class="o">=</span> <span class="n">death_channel</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;death_channel&quot;</span><span class="p">]</span>
+
+        <span class="n">results_data</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># Iterate through conditions</span>
+        <span class="k">for</span> <span class="n">condition</span><span class="p">,</span> <span class="n">replicate_collections</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> 
+                                                   <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;Analyzing conditions&quot;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">condition</span> <span class="o">==</span> <span class="s1">&#39;results&#39;</span><span class="p">:</span>
+                <span class="k">continue</span>
+                
+            <span class="c1"># Process each replicate collection</span>
+            <span class="k">for</span> <span class="n">collection</span> <span class="ow">in</span> <span class="n">replicate_collections</span><span class="p">:</span>
+                <span class="c1"># Only process active spheroids</span>
+                <span class="k">for</span> <span class="n">spheroid_series</span> <span class="ow">in</span> <span class="n">collection</span><span class="o">.</span><span class="n">get_active_spheroids</span><span class="p">():</span>
+                    <span class="k">for</span> <span class="n">timepoint</span><span class="p">,</span> <span class="n">spheroid_image</span> <span class="ow">in</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="c1"># Calculate functional radii</span>
+                            <span class="n">radii</span> <span class="o">=</span> <span class="n">spheroid_image</span><span class="o">.</span><span class="n">functional_radius</span><span class="p">(</span>
+                                <span class="n">live_color</span><span class="o">=</span><span class="n">live_ch</span><span class="p">,</span>
+                                <span class="n">death_color</span><span class="o">=</span><span class="n">death_ch</span>
+                            <span class="p">)</span>
+                            
+                            <span class="c1"># Store results</span>
+                            <span class="n">results_data</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                                <span class="s1">&#39;condition&#39;</span><span class="p">:</span> <span class="n">condition</span><span class="p">,</span>
+                                <span class="s1">&#39;timepoint&#39;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">timepoint</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">),</span>
+                                <span class="s1">&#39;outer_radius&#39;</span><span class="p">:</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;outer&#39;</span><span class="p">],</span>
+                                <span class="s1">&#39;inhibited_radius&#39;</span><span class="p">:</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;inhibited&#39;</span><span class="p">],</span>
+                                <span class="s1">&#39;necrotic_radius&#39;</span><span class="p">:</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;necrotic&#39;</span><span class="p">]</span>
+                            <span class="p">})</span>
+                        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error processing </span><span class="si">{</span><span class="n">condition</span><span class="si">}</span><span class="s2"> at </span><span class="si">{</span><span class="n">timepoint</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Convert to DataFrame</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results_data</span><span class="p">)</span>
+        
+        <span class="c1"># Store results</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">analysis_results</span><span class="p">[</span><span class="s1">&#39;functional_radii&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span>
+        
+        <span class="k">return</span> <span class="n">df</span></div>
+
+
+<div class="viewcode-block" id="Analysis.get_mean_profiles">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.get_mean_profiles">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_mean_profiles</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;functional_radii&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Calculate mean profiles across replicates.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            metric: Name of analysis metric to average</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            DataFrame with mean and std values for each condition/timepoint</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">metric</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">analysis_results</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No results found for metric &#39;</span><span class="si">{</span><span class="n">metric</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">analysis_results</span><span class="p">[</span><span class="n">metric</span><span class="p">]</span>
+        
+        <span class="c1"># Group by condition and timepoint</span>
+        <span class="n">grouped</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s1">&#39;condition&#39;</span><span class="p">,</span> <span class="s1">&#39;timepoint&#39;</span><span class="p">])</span>
+        
+        <span class="c1"># Calculate means and standard deviations</span>
+        <span class="n">means</span> <span class="o">=</span> <span class="n">grouped</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="n">stds</span> <span class="o">=</span> <span class="n">grouped</span><span class="o">.</span><span class="n">std</span><span class="p">()</span>
+        
+        <span class="c1"># Combine into single DataFrame</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">select_dtypes</span><span class="p">(</span><span class="n">include</span><span class="o">=</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">number</span><span class="p">])</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="n">results</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s1">_mean&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">means</span><span class="p">[</span><span class="n">col</span><span class="p">]</span>
+            <span class="n">results</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s1">_std&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">stds</span><span class="p">[</span><span class="n">col</span><span class="p">]</span>
+            
+        <span class="k">return</span> <span class="n">results</span></div>
+
+
+<div class="viewcode-block" id="Analysis.analyze_by_replicate">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.analyze_by_replicate">[docs]</a>
+    <span class="k">def</span> <span class="nf">analyze_by_replicate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">condition</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">analysis_func</span><span class="p">:</span> <span class="nb">callable</span><span class="p">,</span> 
+                            <span class="n">group_by_result</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Analyze spheroids grouped by replicate.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">condition</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Condition </span><span class="si">{</span><span class="n">condition</span><span class="si">}</span><span class="s2"> not found&quot;</span><span class="p">)</span>
+        
+        <span class="n">collection</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span>
+        <span class="n">results_data</span> <span class="o">=</span> <span class="p">[]</span>
+        
+        <span class="c1"># Get unique Results containing this condition</span>
+        <span class="n">result_names</span> <span class="o">=</span> <span class="p">{</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;result_name&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">collection</span><span class="o">.</span><span class="n">replicate_metadata</span><span class="o">.</span><span class="n">values</span><span class="p">()}</span>
+        
+        <span class="k">for</span> <span class="n">result_name</span> <span class="ow">in</span> <span class="n">result_names</span><span class="p">:</span>
+            <span class="c1"># Get spheroids from this Result</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">result_name</span><span class="p">)</span>
+            <span class="n">spheroids</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">get_active_spheroids</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+            
+            <span class="c1"># Process each spheroid series</span>
+            <span class="k">for</span> <span class="n">spheroid_series</span> <span class="ow">in</span> <span class="n">spheroids</span><span class="p">:</span>
+                <span class="n">metadata</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">replicate_metadata</span><span class="p">[</span><span class="n">spheroid_series</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+                
+                <span class="c1"># Analyze each timepoint</span>
+                <span class="k">for</span> <span class="n">timepoint</span><span class="p">,</span> <span class="n">spheroid_image</span> <span class="ow">in</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">spheroid_image_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="c1"># Get metrics from analysis function</span>
+                        <span class="n">metrics</span> <span class="o">=</span> <span class="n">analysis_func</span><span class="p">(</span><span class="n">spheroid_image</span><span class="p">)</span>
+                        
+                        <span class="c1"># Add metadata and metrics to results</span>
+                        <span class="n">result_entry</span> <span class="o">=</span> <span class="p">{</span>
+                            <span class="s1">&#39;timepoint&#39;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">timepoint</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">),</span>
+                            <span class="s1">&#39;result&#39;</span><span class="p">:</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;result_name&quot;</span><span class="p">],</span>
+                            <span class="s1">&#39;replicate_num&#39;</span><span class="p">:</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;replicate_number&quot;</span><span class="p">],</span>
+                            <span class="s1">&#39;spheroid_name&#39;</span><span class="p">:</span> <span class="n">spheroid_series</span><span class="o">.</span><span class="n">name</span>
+                        <span class="p">}</span>
+                        <span class="n">result_entry</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span>
+                        <span class="n">results_data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result_entry</span><span class="p">)</span>
+                        
+                    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error analyzing </span><span class="si">{</span><span class="n">spheroid_series</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> at </span><span class="si">{</span><span class="n">timepoint</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># Convert to DataFrame</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results_data</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">group_by_result</span><span class="p">:</span>
+            <span class="c1"># Group by Result and calculate statistics</span>
+            <span class="n">grouped</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s1">&#39;result&#39;</span><span class="p">,</span> <span class="s1">&#39;timepoint&#39;</span><span class="p">])</span>
+            <span class="n">means</span> <span class="o">=</span> <span class="n">grouped</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">numeric_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">stds</span> <span class="o">=</span> <span class="n">grouped</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">numeric_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            
+            <span class="c1"># Combine means and stds</span>
+            <span class="n">stats_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">means</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="n">stats_df</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s1">_mean&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">means</span><span class="p">[</span><span class="n">col</span><span class="p">]</span>
+                <span class="n">stats_df</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s1">_std&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">stds</span><span class="p">[</span><span class="n">col</span><span class="p">]</span>
+            
+            <span class="k">return</span> <span class="n">stats_df</span>
+        
+        <span class="k">return</span> <span class="n">df</span></div>
+
+
+<div class="viewcode-block" id="Analysis.analyze_functional_structure">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.analyze_functional_structure">[docs]</a>
+    <span class="k">def</span> <span class="nf">analyze_functional_structure</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">condition</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> 
+                                   <span class="n">live_channel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                                   <span class="n">death_channel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Analyze functional radii and structure across replicates.</span>
+<span class="sd">        </span>
+<span class="sd">        Convenience method that uses analyze_by_replicate to compute</span>
+<span class="sd">        functional radii and related metrics.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            condition: Condition to analyze</span>
+<span class="sd">            live_channel: Override default live cell channel</span>
+<span class="sd">            death_channel: Override default dead cell channel</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            DataFrame with functional structure metrics by replicate</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">live_ch</span> <span class="o">=</span> <span class="n">live_channel</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;live_channel&quot;</span><span class="p">]</span>
+        <span class="n">death_ch</span> <span class="o">=</span> <span class="n">death_channel</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;death_channel&quot;</span><span class="p">]</span>
+        
+        <span class="k">def</span> <span class="nf">analyze_structure</span><span class="p">(</span><span class="n">spheroid</span><span class="p">):</span>
+            <span class="c1"># Get functional radii</span>
+            <span class="n">radii</span> <span class="o">=</span> <span class="n">spheroid</span><span class="o">.</span><span class="n">functional_radius</span><span class="p">(</span>
+                <span class="n">live_color</span><span class="o">=</span><span class="n">live_ch</span><span class="p">,</span>
+                <span class="n">death_color</span><span class="o">=</span><span class="n">death_ch</span>
+            <span class="p">)</span>
+            
+            <span class="c1"># Calculate derived metrics</span>
+            <span class="n">metrics</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s1">&#39;outer_radius&#39;</span><span class="p">:</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;outer&#39;</span><span class="p">],</span>
+                <span class="s1">&#39;inhibited_radius&#39;</span><span class="p">:</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;inhibited&#39;</span><span class="p">],</span>
+                <span class="s1">&#39;necrotic_radius&#39;</span><span class="p">:</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;necrotic&#39;</span><span class="p">],</span>
+            <span class="p">}</span>
+            
+            <span class="c1"># Add relative sizes if available</span>
+            <span class="k">if</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;outer&#39;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;inhibited&#39;</span><span class="p">]:</span>
+                    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;inhibited_fraction&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;inhibited&#39;</span><span class="p">]</span> <span class="o">/</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;outer&#39;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;necrotic&#39;</span><span class="p">]:</span>
+                    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;necrotic_fraction&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;necrotic&#39;</span><span class="p">]</span> <span class="o">/</span> <span class="n">radii</span><span class="p">[</span><span class="s1">&#39;outer&#39;</span><span class="p">]</span>
+                
+            <span class="k">return</span> <span class="n">metrics</span>
+        
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyze_by_replicate</span><span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="n">analyze_structure</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Analysis.from_file">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.from_file">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_file</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">experiment</span><span class="p">:</span> <span class="n">Experiment</span><span class="p">,</span> 
+                  <span class="n">instance_group</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">,</span> <span class="n">hdf5_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;Analysis&#39;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load Analysis instance from HDF5 file.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            name: Name of the analysis</span>
+<span class="sd">            index: Index in experiment</span>
+<span class="sd">            experiment: Parent Experiment instance</span>
+<span class="sd">            instance_group: HDF5 group containing analysis data</span>
+<span class="sd">            hdf5_path: Path to HDF5 file</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Loaded Analysis instance</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">analysis</span> <span class="o">=</span> <span class="nb">object</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+        
+        <span class="c1"># Initialize basic attributes</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">index</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">experiment</span> <span class="o">=</span> <span class="n">experiment</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">type_name</span> <span class="o">=</span> <span class="s1">&#39;Analysis&#39;</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">hdf5_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;Analysis/</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&#39;</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">replicates_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">analysis_results</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="p">{}</span>
+        
+        <span class="c1"># Load replicates if they exist</span>
+        <span class="k">if</span> <span class="s1">&#39;replicates&#39;</span> <span class="ow">in</span> <span class="n">instance_group</span><span class="p">:</span>
+            <span class="n">replicates_group</span> <span class="o">=</span> <span class="n">instance_group</span><span class="p">[</span><span class="s1">&#39;replicates&#39;</span><span class="p">]</span>
+            
+            <span class="c1"># Load results</span>
+            <span class="k">if</span> <span class="s1">&#39;results&#39;</span> <span class="ow">in</span> <span class="n">replicates_group</span><span class="p">:</span>
+                <span class="n">results_group</span> <span class="o">=</span> <span class="n">replicates_group</span><span class="p">[</span><span class="s1">&#39;results&#39;</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">result_name</span> <span class="ow">in</span> <span class="n">results_group</span><span class="p">:</span>
+                    <span class="n">result</span> <span class="o">=</span> <span class="n">experiment</span><span class="o">.</span><span class="n">results_dict</span><span class="p">[</span><span class="n">result_name</span><span class="p">]</span>
+                    <span class="n">analysis</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+                    
+                    <span class="c1"># Load conditions for this result</span>
+                    <span class="n">result_replicates</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">replicates</span>
+                    
+                    <span class="c1"># Add SpheroidCollections to condition groups</span>
+                    <span class="k">for</span> <span class="n">condition</span><span class="p">,</span> <span class="n">spheroid_collection</span> <span class="ow">in</span> <span class="n">result_replicates</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                        <span class="k">if</span> <span class="n">condition</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">analysis</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">:</span>
+                            <span class="n">analysis</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                            
+                        <span class="c1"># Restore ignored spheroids if they exist</span>
+                        <span class="k">if</span> <span class="n">condition</span> <span class="ow">in</span> <span class="n">replicates_group</span><span class="p">[</span><span class="s1">&#39;conditions&#39;</span><span class="p">]:</span>
+                            <span class="n">condition_group</span> <span class="o">=</span> <span class="n">replicates_group</span><span class="p">[</span><span class="s1">&#39;conditions&#39;</span><span class="p">][</span><span class="n">condition</span><span class="p">]</span>
+                            <span class="k">for</span> <span class="n">collection_name</span> <span class="ow">in</span> <span class="n">condition_group</span><span class="p">:</span>
+                                <span class="n">collection_group</span> <span class="o">=</span> <span class="n">condition_group</span><span class="p">[</span><span class="n">collection_name</span><span class="p">]</span>
+                                <span class="k">if</span> <span class="n">collection_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;result&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">result</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                                    <span class="k">if</span> <span class="s1">&#39;ignored_spheroids&#39;</span> <span class="ow">in</span> <span class="n">collection_group</span><span class="p">:</span>
+                                        <span class="n">ignored</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> 
+                                                 <span class="n">collection_group</span><span class="p">[</span><span class="s1">&#39;ignored_spheroids&#39;</span><span class="p">][:]]</span>
+                                        <span class="n">spheroid_collection</span><span class="o">.</span><span class="n">ignored_spheroids</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">ignored</span><span class="p">)</span>
+                                        
+                        <span class="n">analysis</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">spheroid_collection</span><span class="p">)</span>
+        
+        <span class="n">analysis</span><span class="o">.</span><span class="n">time_periods</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">analysis</span><span class="o">.</span><span class="n">active_period</span> <span class="o">=</span> <span class="kc">None</span>
+        
+        <span class="c1"># Load time periods if they exist</span>
+        <span class="k">if</span> <span class="s1">&#39;time_periods&#39;</span> <span class="ow">in</span> <span class="n">instance_group</span><span class="p">:</span>
+            <span class="n">periods_group</span> <span class="o">=</span> <span class="n">instance_group</span><span class="p">[</span><span class="s1">&#39;time_periods&#39;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">period_name</span> <span class="ow">in</span> <span class="n">periods_group</span><span class="p">:</span>
+                <span class="n">period_group</span> <span class="o">=</span> <span class="n">periods_group</span><span class="p">[</span><span class="n">period_name</span><span class="p">]</span>
+                
+                <span class="c1"># Load relative time if exists</span>
+                <span class="n">relative</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">if</span> <span class="s1">&#39;relative&#39;</span> <span class="ow">in</span> <span class="n">period_group</span><span class="p">:</span>
+                    <span class="n">relative</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">period_group</span><span class="p">[</span><span class="s1">&#39;relative&#39;</span><span class="p">][:])</span>
+                
+                <span class="c1"># Load absolute times if exist</span>
+                <span class="n">absolute</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">if</span> <span class="s1">&#39;absolute&#39;</span> <span class="ow">in</span> <span class="n">period_group</span><span class="p">:</span>
+                    <span class="n">absolute</span> <span class="o">=</span> <span class="p">{}</span>
+                    <span class="k">for</span> <span class="n">result_name</span> <span class="ow">in</span> <span class="n">period_group</span><span class="p">[</span><span class="s1">&#39;absolute&#39;</span><span class="p">]:</span>
+                        <span class="n">dates</span> <span class="o">=</span> <span class="n">period_group</span><span class="p">[</span><span class="s1">&#39;absolute&#39;</span><span class="p">][</span><span class="n">result_name</span><span class="p">]</span>
+                        <span class="n">absolute</span><span class="p">[</span><span class="n">result_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                            <span class="n">datetime</span><span class="o">.</span><span class="n">fromisoformat</span><span class="p">(</span><span class="n">dates</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;start&#39;</span><span class="p">]),</span>
+                            <span class="n">datetime</span><span class="o">.</span><span class="n">fromisoformat</span><span class="p">(</span><span class="n">dates</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;end&#39;</span><span class="p">])</span>
+                        <span class="p">)</span>
+                
+                <span class="c1"># Create TimeWindow</span>
+                <span class="n">analysis</span><span class="o">.</span><span class="n">time_periods</span><span class="p">[</span><span class="n">period_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">TimeWindow</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">period_name</span><span class="p">,</span>
+                    <span class="n">relative</span><span class="o">=</span><span class="n">relative</span><span class="p">,</span>
+                    <span class="n">absolute</span><span class="o">=</span><span class="n">absolute</span>
+                <span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">analysis</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;String representation showing analysis details.&quot;&quot;&quot;</span>
+        <span class="n">replicate_counts</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">get_active_spheroids</span><span class="p">())</span> 
+                          <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        
+        <span class="k">return</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ANALYSIS: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Number of conditions: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">replicate_counts</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Conditions and replicates: </span><span class="si">{</span><span class="n">replicate_counts</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Added results: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">name</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Analysis.set_config">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.set_config">[docs]</a>
+    <span class="k">def</span> <span class="nf">set_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Update analysis configuration.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            **kwargs: Configuration parameters to update</span>
+<span class="sd">            </span>
+<span class="sd">        Example:</span>
+<span class="sd">            analysis.set_config(</span>
+<span class="sd">                live_channel=&quot;green&quot;,</span>
+<span class="sd">                threshold_method=&quot;adaptive&quot;,</span>
+<span class="sd">                min_size=200</span>
+<span class="sd">            )</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Analysis.get_config">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.get_config">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get current analysis configuration.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Dictionary of current configuration parameters</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="Analysis.add_time_period">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.add_time_period">[docs]</a>
+    <span class="k">def</span> <span class="nf">add_time_period</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span>
+                       <span class="n">relative</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                       <span class="n">absolute</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                       <span class="n">conditions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add a time period for analysis.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            name: Name for the time period</span>
+<span class="sd">            relative: Optional (start_hours, end_hours) from replicate start</span>
+<span class="sd">            absolute: Optional dict mapping result_names to (start_date, end_date)</span>
+<span class="sd">            conditions: Optional list of conditions to apply to (default: all)</span>
+<span class="sd">            </span>
+<span class="sd">        Example:</span>
+<span class="sd">            # Add relative time period for all conditions</span>
+<span class="sd">            analysis.add_time_period(</span>
+<span class="sd">                &quot;day2&quot;, </span>
+<span class="sd">                relative=(24, 48)  # 24-48h from each replicate&#39;s start</span>
+<span class="sd">            )</span>
+<span class="sd">            </span>
+<span class="sd">            # Add absolute time period for specific conditions</span>
+<span class="sd">            analysis.add_time_period(</span>
+<span class="sd">                &quot;phase1&quot;,</span>
+<span class="sd">                absolute={</span>
+<span class="sd">                    &#39;Day1_Result&#39;: (&#39;2024-01-01&#39;, &#39;2024-01-02&#39;),</span>
+<span class="sd">                    &#39;Day2_Result&#39;: (&#39;2024-01-02&#39;, &#39;2024-01-03&#39;)</span>
+<span class="sd">                },</span>
+<span class="sd">                conditions=[&#39;Control&#39;, &#39;Treatment&#39;]</span>
+<span class="sd">            )</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;period_</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time_periods</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            
+        <span class="c1"># Convert string dates to datetime if needed</span>
+        <span class="k">if</span> <span class="n">absolute</span><span class="p">:</span>
+            <span class="n">processed_absolute</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">result</span><span class="p">,</span> <span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span> <span class="ow">in</span> <span class="n">absolute</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="n">start</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="n">end</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">)</span>
+                <span class="n">processed_absolute</span><span class="p">[</span><span class="n">result</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">processed_absolute</span> <span class="o">=</span> <span class="kc">None</span>
+            
+        <span class="c1"># Create TimeWindow</span>
+        <span class="n">time_window</span> <span class="o">=</span> <span class="n">TimeWindow</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">relative</span><span class="o">=</span><span class="n">relative</span><span class="p">,</span>
+            <span class="n">absolute</span><span class="o">=</span><span class="n">processed_absolute</span>
+        <span class="p">)</span>
+        
+        <span class="c1"># Store in analysis</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">time_periods</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">time_window</span>
+        
+        <span class="c1"># Add to specified conditions</span>
+        <span class="n">target_conditions</span> <span class="o">=</span> <span class="n">conditions</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">condition</span> <span class="ow">in</span> <span class="n">target_conditions</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">condition</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span><span class="o">.</span><span class="n">time_periods</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">time_window</span></div>
+
+
+<div class="viewcode-block" id="Analysis.set_active_period">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.set_active_period">[docs]</a>
+    <span class="k">def</span> <span class="nf">set_active_period</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">period_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                         <span class="n">conditions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Set active time period for analysis.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            period_name: Name of period to activate, or None to clear</span>
+<span class="sd">            conditions: Optional list of conditions to apply to (default: all)</span>
+<span class="sd">            </span>
+<span class="sd">        Example:</span>
+<span class="sd">            # Set period for all conditions</span>
+<span class="sd">            analysis.set_active_period(&quot;day2&quot;)</span>
+<span class="sd">            </span>
+<span class="sd">            # Set different periods for different conditions</span>
+<span class="sd">            analysis.set_active_period(&quot;early&quot;, conditions=[&quot;Control&quot;])</span>
+<span class="sd">            analysis.set_active_period(&quot;late&quot;, conditions=[&quot;Treatment&quot;])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">period_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">period_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_periods</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Time period &#39;</span><span class="si">{</span><span class="n">period_name</span><span class="si">}</span><span class="s2">&#39; not found&quot;</span><span class="p">)</span>
+            
+        <span class="bp">self</span><span class="o">.</span><span class="n">active_period</span> <span class="o">=</span> <span class="n">period_name</span>
+        
+        <span class="c1"># Apply to specified conditions</span>
+        <span class="n">target_conditions</span> <span class="o">=</span> <span class="n">conditions</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">condition</span> <span class="ow">in</span> <span class="n">target_conditions</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">condition</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span><span class="o">.</span><span class="n">set_active_period</span><span class="p">(</span><span class="n">period_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Analysis.get_time_periods">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.get_time_periods">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_time_periods</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get all defined time periods.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Dictionary mapping period names to TimeWindow objects</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_periods</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="Analysis.get_active_period">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.get_active_period">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_active_period</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">condition</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get active time period name.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            condition: Optional condition to check specific collection</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Name of active period or None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">condition</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">condition</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Condition &#39;</span><span class="si">{</span><span class="n">condition</span><span class="si">}</span><span class="s2">&#39; not found&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicates_dict</span><span class="p">[</span><span class="n">condition</span><span class="p">]</span><span class="o">.</span><span class="n">active_period</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_period</span></div>
+
+
+<div class="viewcode-block" id="Analysis.save_to_hdf5">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.analysis.Analysis.save_to_hdf5">[docs]</a>
+    <span class="k">def</span> <span class="nf">save_to_hdf5</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Save analysis state to HDF5.&quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="n">analysis_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_key</span><span class="p">]</span>
+            
+            <span class="c1"># Save time periods</span>
+            <span class="k">if</span> <span class="s1">&#39;time_periods&#39;</span> <span class="ow">in</span> <span class="n">analysis_group</span><span class="p">:</span>
+                <span class="k">del</span> <span class="n">analysis_group</span><span class="p">[</span><span class="s1">&#39;time_periods&#39;</span><span class="p">]</span>
+            <span class="n">periods_group</span> <span class="o">=</span> <span class="n">analysis_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s1">&#39;time_periods&#39;</span><span class="p">)</span>
+            
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">window</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_periods</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">period_group</span> <span class="o">=</span> <span class="n">periods_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                
+                <span class="c1"># Save relative time if exists</span>
+                <span class="k">if</span> <span class="n">window</span><span class="o">.</span><span class="n">relative</span><span class="p">:</span>
+                    <span class="n">period_group</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s1">&#39;relative&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">window</span><span class="o">.</span><span class="n">relative</span><span class="p">)</span>
+                
+                <span class="c1"># Save absolute times if exist</span>
+                <span class="k">if</span> <span class="n">window</span><span class="o">.</span><span class="n">absolute</span><span class="p">:</span>
+                    <span class="n">abs_group</span> <span class="o">=</span> <span class="n">period_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s1">&#39;absolute&#39;</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">result_name</span><span class="p">,</span> <span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span> <span class="ow">in</span> <span class="n">window</span><span class="o">.</span><span class="n">absolute</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                        <span class="n">result_group</span> <span class="o">=</span> <span class="n">abs_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="n">result_name</span><span class="p">)</span>
+                        <span class="n">result_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;start&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">start</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+                        <span class="n">result_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;end&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">end</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Cedric Heuermann.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

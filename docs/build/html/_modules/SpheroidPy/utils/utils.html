@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpheroidPy.utils.utils &mdash; SpheroidPy 0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=2709fde1"></script>
+        <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html">
+            
+              <img src="../../../_static/SpheroidPy_logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../SpheroidPy.html">SpheroidPy package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">SpheroidPy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">SpheroidPy.utils.utils</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for SpheroidPy.utils.utils</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">product</span>
+
+<div class="viewcode-block" id="extract_time">
+<a class="viewcode-back" href="../../../SpheroidPy.utils.html#SpheroidPy.utils.utils.extract_time">[docs]</a>
+<span class="k">def</span> <span class="nf">extract_time</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+    <span class="c1"># Finden der Positionen der relevanten Teile des Strings</span>
+    <span class="n">start</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="o">-</span><span class="mi">22</span>
+    <span class="n">y_idx</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span><span class="n">start</span><span class="p">)</span>
+    <span class="n">m_idx</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;m&#39;</span><span class="p">,</span><span class="n">start</span><span class="p">)</span>
+    <span class="n">d_idx</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;d&#39;</span><span class="p">,</span><span class="n">start</span><span class="p">)</span>
+    <span class="n">h_idx</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;h&#39;</span><span class="p">,</span><span class="n">start</span><span class="p">)</span>
+    <span class="n">min_idx</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;m&#39;</span><span class="p">,</span> <span class="n">h_idx</span><span class="p">)</span>
+
+    <span class="c1"># Extrahieren der Zahlen als Substrings und Umwandeln in int</span>
+    <span class="n">year</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="n">y_idx</span><span class="o">-</span><span class="mi">4</span><span class="p">:</span><span class="n">y_idx</span><span class="p">])</span>
+    <span class="n">month</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="n">y_idx</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">m_idx</span><span class="p">])</span>
+    <span class="n">day</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="n">m_idx</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">d_idx</span><span class="p">])</span>
+    <span class="n">hour</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="n">d_idx</span><span class="o">+</span><span class="mi">2</span><span class="p">:</span><span class="n">h_idx</span><span class="p">])</span>
+    <span class="n">minute</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="n">h_idx</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">min_idx</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="p">,</span> <span class="n">hour</span><span class="p">,</span> <span class="n">minute</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># Funktion, um Werte anzupassen (größer als 1000 -&gt; &#39;xK&#39;)</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<div class="viewcode-block" id="format_thousand_annotation">
+<a class="viewcode-back" href="../../../SpheroidPy.utils.html#SpheroidPy.utils.utils.format_thousand_annotation">[docs]</a>
+<span class="k">def</span> <span class="nf">format_thousand_annotation</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+    <span class="c1">#print(&#39;a&#39;,val,type(val))</span>
+    <span class="k">if</span> <span class="n">pd</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">or</span> <span class="n">pd</span><span class="o">.</span><span class="n">isnull</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>  <span class="c1"># Leere Zellen für NaN-Werte</span>
+    <span class="k">elif</span> <span class="n">val</span> <span class="o">&gt;=</span> <span class="mi">1000</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">val</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1000</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">K&quot;</span>  <span class="c1"># Zeigt nur eine Dezimalstelle</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">val</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span>  <span class="c1"># Ganze Zahl für Werte unter 1000</span></div>
+
+
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="c1"># Funktion, um alle Ordner in einem bestimmten Verzeichnis zu finden und ihre Namen zu speichern</span>
+<div class="viewcode-block" id="find_folders">
+<a class="viewcode-back" href="../../../SpheroidPy.utils.html#SpheroidPy.utils.utils.find_folders">[docs]</a>
+<span class="k">def</span> <span class="nf">find_folders</span><span class="p">(</span><span class="n">directory</span><span class="p">):</span>
+    <span class="n">folders</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">directory</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directory</span><span class="p">,</span> <span class="n">item</span><span class="p">)):</span>
+            <span class="n">folders</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">folders</span></div>
+
+
+<span class="c1"># Funktion, um alle Dateien in einem bestimmten Verzeichnis zu finden und ihre Namen zu speichern</span>
+<div class="viewcode-block" id="find_files">
+<a class="viewcode-back" href="../../../SpheroidPy.utils.html#SpheroidPy.utils.utils.find_files">[docs]</a>
+<span class="k">def</span> <span class="nf">find_files</span><span class="p">(</span><span class="n">directory</span><span class="p">):</span>
+    <span class="n">files</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">directory</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directory</span><span class="p">,</span> <span class="n">item</span><span class="p">))</span> <span class="ow">and</span> <span class="n">item</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;zvi&#39;</span><span class="p">):</span>
+            <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">files</span></div>
+
+
+
+<span class="c1"># Funktion zur Bestimmung der Replikate</span>
+<div class="viewcode-block" id="find_replicates">
+<a class="viewcode-back" href="../../../SpheroidPy.utils.html#SpheroidPy.utils.utils.find_replicates">[docs]</a>
+<span class="k">def</span> <span class="nf">find_replicates</span><span class="p">(</span><span class="n">dataframe_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">        Finds the replicates of a dictionary of pd.Dataframes</span>
+
+<span class="sd">    :param dataframe_dict: dictionary of dataframes, where the key is the name of the dataframe</span>
+<span class="sd">    :return: dictionary of the form {((&#39;HepG2&#39;, 20000.0), (&#39;Hep3B&#39;, 20000.0)): [&#39;B2&#39;, &#39;C2&#39;], ...}</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">replikate</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">keys</span> <span class="o">=</span> <span class="p">[</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">dataframe_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()]</span>
+
+    <span class="c1"># Alle möglichen Positionen (Zeile, Spalte)</span>
+    <span class="n">positionen</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">product</span><span class="p">(</span><span class="n">dataframe_dict</span><span class="p">[</span><span class="n">keys</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">dataframe_dict</span><span class="p">[</span><span class="n">keys</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">columns</span><span class="p">))</span>
+
+    <span class="c1"># Schleife über alle Positionen</span>
+    <span class="k">for</span> <span class="n">pos</span> <span class="ow">in</span> <span class="n">positionen</span><span class="p">:</span>
+        <span class="c1"># Bestimme Werte für jede Position für jeden df</span>
+        <span class="n">werte</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">df</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">pos</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">pos</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">dataframe_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="c1"># Konvertiere NaN-Werte zu None, um sie später zu ignorieren</span>
+        <span class="n">werte</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="p">(</span><span class="n">v</span> <span class="k">if</span> <span class="n">pd</span><span class="o">.</span><span class="n">notna</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">werte</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+
+        <span class="c1"># Überspringen, wenn einer der Werte None ist (keine vollständigen Replikate)</span>
+        <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">werte</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="k">continue</span>
+
+        <span class="c1"># Spezifikation als Tupel zur Verwendung als Dictionary-Schlüssel</span>
+        <span class="n">werte_tupel</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">werte</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+
+        <span class="c1"># Konvertiere Position in das formatierte Format (z.B. &quot;B2&quot;)</span>
+        <span class="n">pos_label</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">pos</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># Füge Position zur Liste der jeweiligen Replikat-Spezifikation hinzu</span>
+        <span class="k">if</span> <span class="n">werte_tupel</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">replikate</span><span class="p">:</span>
+            <span class="n">replikate</span><span class="p">[</span><span class="n">werte_tupel</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">replikate</span><span class="p">[</span><span class="n">werte_tupel</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pos_label</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">replikate</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Cedric Heuermann.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

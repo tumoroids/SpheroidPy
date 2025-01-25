@@ -1,0 +1,20 @@
+/* Beispiel: Ändere den Hauptlink und die Headerfarbe zu Orange */
+a {
+    color: #aa3d03;  /* Helles Orange */
+}
+
+.wy-navbar .wy-navbar-search {
+    background-color: #FFA500 !important;  /* Helles Orange */
+}
+
+.wy-side-nav-search {
+    background-color: #ffefe2 !important;  /* Helles Orange */
+}
+
+.wy-menu-vertical p.caption {
+  color: #FFA500  !important;
+}
+
+button, .wy-button {
+    color: white !important;
+}

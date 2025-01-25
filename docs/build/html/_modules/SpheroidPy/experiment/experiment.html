@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpheroidPy.experiment.experiment &mdash; SpheroidPy 0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=2709fde1"></script>
+        <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html">
+            
+              <img src="../../../_static/SpheroidPy_logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../SpheroidPy.html">SpheroidPy package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">SpheroidPy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">SpheroidPy.experiment.experiment</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for SpheroidPy.experiment.experiment</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">openpyxl</span> <span class="kn">import</span> <span class="n">Workbook</span><span class="p">,</span> <span class="n">load_workbook</span>
+<span class="kn">from</span> <span class="nn">openpyxl.utils</span> <span class="kn">import</span> <span class="n">get_column_letter</span>
+<span class="kn">from</span> <span class="nn">openpyxl.styles</span> <span class="kn">import</span> <span class="n">PatternFill</span><span class="p">,</span> <span class="n">Alignment</span><span class="p">,</span> <span class="n">Font</span><span class="p">,</span> <span class="n">Protection</span><span class="p">,</span> <span class="n">Border</span><span class="p">,</span> <span class="n">Side</span>
+<span class="kn">import</span> <span class="nn">subprocess</span><span class="o">,</span> <span class="nn">time</span><span class="o">,</span> <span class="nn">psutil</span><span class="o">,</span> <span class="nn">h5py</span>
+
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">random</span><span class="o">,</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>  <span class="c1"># Update import</span>
+
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+
+<span class="c1"># Classes</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.experiment.platemap</span> <span class="kn">import</span> <span class="n">Platemap</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.experiment.result</span> <span class="kn">import</span> <span class="n">Result</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.experiment.analysis</span> <span class="kn">import</span> <span class="n">Analysis</span><span class="c1">#, AnalysisJob</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.experiment.visualisation</span> <span class="kn">import</span> <span class="n">Visualisation</span>
+<span class="c1"># Methods</span>
+<span class="kn">from</span> <span class="nn">SpheroidPy.utils.file_management</span> <span class="kn">import</span> <span class="n">direct_subgroups</span>
+
+
+
+<div class="viewcode-block" id="Experiment">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.experiment.Experiment">[docs]</a>
+<span class="k">class</span> <span class="nc">Experiment</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A class representing a scientific experiment with plate-based assays.</span>
+<span class="sd">    </span>
+<span class="sd">    This class manages experimental data from plate-based assays, including layout,</span>
+<span class="sd">    results, analyses and visualization. It provides methods for data storage,</span>
+<span class="sd">    retrieval and analysis.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        name (str): Name of the experiment</span>
+<span class="sd">        layout (int): Number of wells in the plate (e.g. 96, 384)</span>
+<span class="sd">        col (int): Number of columns in the plate layout</span>
+<span class="sd">        row (int): Number of rows in the plate layout</span>
+<span class="sd">        results_dict (dict): Dictionary mapping result names to Result objects</span>
+<span class="sd">        analyses_dict (dict): Dictionary mapping analysis names to Analysis objects</span>
+<span class="sd">        visualisation (Visualisation): Object for experiment visualization</span>
+<span class="sd">        hdf5_path (Path): Path to HDF5 file storing experiment data</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="c1"># Use dataclass for cleaner attribute definition</span>
+    <span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+    
+    <span class="c1"># Define constants at class level</span>
+    <span class="n">SUPPORTED_LAYOUTS</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="mi">384</span><span class="p">:</span> <span class="p">(</span><span class="mi">24</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span>  <span class="c1"># (columns, rows)</span>
+        <span class="mi">96</span><span class="p">:</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> 
+        <span class="mi">48</span><span class="p">:</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span>
+        <span class="mi">24</span><span class="p">:</span> <span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+        <span class="mi">12</span><span class="p">:</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+        <span class="mi">6</span><span class="p">:</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="c1"># Excel style constants</span>
+    <span class="n">EXCEL_STYLES</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;tab_color&#39;</span><span class="p">:</span> <span class="s1">&#39;E6B8B7&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;table_colors&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;963634&#39;</span><span class="p">,</span> <span class="s1">&#39;E6B8B7&#39;</span><span class="p">,</span> <span class="s1">&#39;F2DCDB&#39;</span><span class="p">],</span>
+        <span class="s1">&#39;border&#39;</span><span class="p">:</span> <span class="n">Border</span><span class="p">(</span>
+            <span class="n">left</span><span class="o">=</span><span class="n">Side</span><span class="p">(</span><span class="n">style</span><span class="o">=</span><span class="s1">&#39;thin&#39;</span><span class="p">),</span>
+            <span class="n">right</span><span class="o">=</span><span class="n">Side</span><span class="p">(</span><span class="n">style</span><span class="o">=</span><span class="s1">&#39;thin&#39;</span><span class="p">),</span> 
+            <span class="n">top</span><span class="o">=</span><span class="n">Side</span><span class="p">(</span><span class="n">style</span><span class="o">=</span><span class="s1">&#39;thin&#39;</span><span class="p">),</span>
+            <span class="n">bottom</span><span class="o">=</span><span class="n">Side</span><span class="p">(</span><span class="n">style</span><span class="o">=</span><span class="s1">&#39;thin&#39;</span><span class="p">)</span>
+        <span class="p">)</span>
+    <span class="p">}</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">layout</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize experiment with specified layout.</span>
+<span class="sd">        </span>
+<span class="sd">        Creates a new experiment instance with the given name and plate layout.</span>
+<span class="sd">        Sets up data storage directories and initializes dictionaries for results</span>
+<span class="sd">        and analyses.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            name (str): Name of the experiment</span>
+<span class="sd">            layout (int): Number of wells in the plate (e.g. 96, 384)</span>
+<span class="sd">            path (Path | None, optional): Custom path for data storage. If None,</span>
+<span class="sd">                uses current working directory. Defaults to None.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            ValueError: If specified layout is not one of the supported layouts</span>
+<span class="sd">                (6, 12, 24, 48, 96, or 384 wells)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Initialize basic attributes first</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        
+        <span class="c1"># Validate and set layout</span>
+        <span class="k">if</span> <span class="n">layout</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">SUPPORTED_LAYOUTS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layout </span><span class="si">{</span><span class="n">layout</span><span class="si">}</span><span class="s2"> not supported. Must be one of: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">SUPPORTED_LAYOUTS</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layout</span> <span class="o">=</span> <span class="n">layout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">col</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">row</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">SUPPORTED_LAYOUTS</span><span class="p">[</span><span class="n">layout</span><span class="p">]</span>
+
+        <span class="c1"># Initialize storage</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        
+        <span class="c1"># Create visualization instance and set experiment</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visualisation</span> <span class="o">=</span> <span class="n">Visualisation</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visualisation</span><span class="o">.</span><span class="n">set_experiment</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="c1"># Setup data storage path</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_setup_storage_path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_create_hdf5_file</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_setup_storage_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Setup and create storage directory.&quot;&quot;&quot;</span>
+        <span class="n">storage_path</span> <span class="o">=</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span> <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">path</span>
+        <span class="n">exp_path</span> <span class="o">=</span> <span class="n">storage_path</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+        <span class="n">exp_path</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">exp_path</span> <span class="o">/</span> <span class="sa">f</span><span class="s1">&#39;Experiment_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s1">_data.h5&#39;</span>
+
+<div class="viewcode-block" id="Experiment.from_file">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.experiment.Experiment.from_file">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_file</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">filepath</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;Experiment&#39;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create experiment instance from file.&quot;&quot;&quot;</span>
+        <span class="n">experiment</span> <span class="o">=</span> <span class="nb">object</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+        
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="c1"># Load basic attributes</span>
+            <span class="n">experiment</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span>
+            <span class="n">experiment</span><span class="o">.</span><span class="n">layout</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;layout&#39;</span><span class="p">]</span>
+            <span class="n">experiment</span><span class="o">.</span><span class="n">col</span><span class="p">,</span> <span class="n">experiment</span><span class="o">.</span><span class="n">row</span> <span class="o">=</span> <span class="n">experiment</span><span class="o">.</span><span class="n">SUPPORTED_LAYOUTS</span><span class="p">[</span><span class="n">experiment</span><span class="o">.</span><span class="n">layout</span><span class="p">]</span>
+            <span class="n">experiment</span><span class="o">.</span><span class="n">hdf5_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+
+            <span class="c1"># Initialize storage</span>
+            <span class="n">experiment</span><span class="o">.</span><span class="n">results_dict</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">experiment</span><span class="o">.</span><span class="n">analyses_dict</span> <span class="o">=</span> <span class="p">{}</span>
+            
+            <span class="c1"># Create visualization instance and set experiment</span>
+            <span class="n">experiment</span><span class="o">.</span><span class="n">visualisation</span> <span class="o">=</span> <span class="n">Visualisation</span><span class="p">()</span>
+            <span class="n">experiment</span><span class="o">.</span><span class="n">visualisation</span><span class="o">.</span><span class="n">set_experiment</span><span class="p">(</span><span class="n">experiment</span><span class="p">)</span>
+
+            <span class="c1"># Load results and analyses</span>
+            <span class="k">for</span> <span class="n">element</span><span class="p">,</span> <span class="n">class_</span><span class="p">,</span> <span class="n">dict_</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">([</span><span class="s1">&#39;Result&#39;</span><span class="p">,</span> <span class="s1">&#39;Analysis&#39;</span><span class="p">],</span> 
+                                            <span class="p">[</span><span class="n">Result</span><span class="p">,</span> <span class="n">Analysis</span><span class="p">],</span> 
+                                            <span class="p">[</span><span class="n">experiment</span><span class="o">.</span><span class="n">results_dict</span><span class="p">,</span> <span class="n">experiment</span><span class="o">.</span><span class="n">analyses_dict</span><span class="p">]):</span>
+                <span class="k">if</span> <span class="n">element</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">hdf_file</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                    
+                <span class="n">element_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="p">[</span><span class="n">element</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">element_group</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">element</span> <span class="o">==</span> <span class="s1">&#39;Analysis&#39;</span><span class="p">:</span>
+                        <span class="k">continue</span>  <span class="c1"># todo: ToBeImplemented!!!!</span>
+
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">index</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;-&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">:])</span>
+                        <span class="n">instance_group</span> <span class="o">=</span> <span class="n">element_group</span><span class="p">[</span><span class="n">instance</span><span class="p">]</span>
+                        <span class="n">dict_</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">class_</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">experiment</span><span class="p">,</span> 
+                                                     <span class="n">instance_group</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+                    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Warning: Failed to load </span><span class="si">{</span><span class="n">element</span><span class="si">}</span><span class="s2"> &#39;</span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2">&#39;: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">experiment</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">results</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Result</span> <span class="o">|</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="o">.</span><span class="n">values</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span>
+
+<div class="viewcode-block" id="Experiment.result">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.experiment.Experiment.result">[docs]</a>
+    <span class="k">def</span> <span class="nf">result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Result</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get or create a Result object.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            name: Name of the Result to get/create. If None, returns dictionary of all Results.</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            If name is None, returns dictionary of all Results.</span>
+<span class="sd">            If name is provided, returns the specified Result object, creating it if it doesn&#39;t exist.</span>
+<span class="sd">            </span>
+<span class="sd">        Raises:</span>
+<span class="sd">            Exception: If name is provided but is not a string.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="p">:</span>
+                <span class="n">Result</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1"> is no string&#39;</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">analyses</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Analysis</span> <span class="o">|</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span><span class="o">.</span><span class="n">values</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span>
+
+<div class="viewcode-block" id="Experiment.analysis">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.experiment.Experiment.analysis">[docs]</a>
+    <span class="k">def</span> <span class="nf">analysis</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Analysis</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Get or create an Analysis object.</span>
+<span class="sd">            </span>
+<span class="sd">            Args:</span>
+<span class="sd">                name: Name of the Analysis to get/create. If None, returns dictionary of all Analyses.</span>
+<span class="sd">                </span>
+<span class="sd">            Returns:</span>
+<span class="sd">                If name is None, returns dictionary of all Analyses.</span>
+<span class="sd">                If name is provided, returns the specified Analysis object, creating it if it doesn&#39;t exist.</span>
+<span class="sd">                </span>
+<span class="sd">            Raises:</span>
+<span class="sd">                Exception: If name is provided but is not a string.</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span><span class="p">:</span>
+                    <span class="n">Analysis</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1"> is no string&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Experiment.to_excel">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.experiment.Experiment.to_excel">[docs]</a>
+    <span class="k">def</span> <span class="nf">to_excel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">platmap_names</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">result_names</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">analysis_names</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">workbook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_excel_workbook_and_sheet</span><span class="p">()</span>
+
+        <span class="c1"># if an element is given as string convert to list</span>
+        <span class="k">for</span> <span class="n">el</span> <span class="ow">in</span> <span class="p">[</span><span class="n">platmap_names</span><span class="p">,</span> <span class="n">result_names</span><span class="p">,</span> <span class="n">analysis_names</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">el</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">el</span> <span class="o">=</span> <span class="p">[</span><span class="n">el</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="nb">type</span><span class="p">,</span> <span class="n">_name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">element_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="p">[</span><span class="n">platmap_names</span><span class="p">,</span> <span class="n">result_names</span><span class="p">,</span> <span class="n">analysis_names</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="n">_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">element_dict</span><span class="p">[</span><span class="nb">type</span><span class="p">]:</span>
+                    <span class="n">element</span><span class="o">.</span><span class="n">_worksheet</span><span class="p">(</span><span class="n">workbook</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">element_dict</span><span class="p">[</span><span class="nb">type</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">element</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">_list</span><span class="p">:</span>
+                        <span class="n">element</span><span class="o">.</span><span class="n">_worksheet</span><span class="p">(</span><span class="n">workbook</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">hdf5_tree</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Structure of hdf5-file:</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">h5file</span><span class="p">:</span>
+            <span class="c1"># Funktion zum rekursiven Durchlaufen und Anzeigen nur der Gruppen</span>
+            <span class="k">def</span> <span class="nf">print_groups</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">):</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+            <span class="c1"># Datei durchsuchen und nur die Gruppen ausgeben</span>
+            <span class="n">h5file</span><span class="o">.</span><span class="n">visititems</span><span class="p">(</span><span class="n">print_groups</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_create_hdf5_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="c1"># create groups for all associated types</span>
+            <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;Result&#39;</span><span class="p">,</span> <span class="s1">&#39;Analysis&#39;</span><span class="p">]:</span>
+                <span class="n">hdf_file</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">track_order</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+            <span class="c1"># save global Properties of Experiment</span>
+            <span class="n">hdf_file</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
+            <span class="n">hdf_file</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;layout&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span>
+            <span class="n">hdf_file</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;date&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_add_element</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">element</span><span class="p">:</span> <span class="n">Result</span> <span class="o">|</span> <span class="n">Analysis</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add a new element to the experiment.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            element: Result or Analysis instance to add</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Index assigned to the element</span>
+<span class="sd">            </span>
+<span class="sd">        Raises:</span>
+<span class="sd">            ValueError: If element name already exists</span>
+<span class="sd">            Exception: If invalid element type</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">element</span><span class="o">.</span><span class="n">type_name</span> <span class="o">==</span> <span class="s1">&#39;Result&#39;</span><span class="p">:</span>
+            <span class="n">element_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span>
+        <span class="k">elif</span> <span class="n">element</span><span class="o">.</span><span class="n">type_name</span> <span class="o">==</span> <span class="s1">&#39;Analysis&#39;</span><span class="p">:</span>
+            <span class="n">element_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Invalid element type: </span><span class="si">{</span><span class="n">element</span><span class="o">.</span><span class="n">type_name</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Check if name is already taken</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">_el</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">element</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">_el</span> <span class="ow">in</span> <span class="n">element_dict</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Element </span><span class="si">{</span><span class="n">element</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> already exists! Please choose another name&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Add to dictionary</span>
+        <span class="n">element_dict</span><span class="p">[</span><span class="n">element</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">element</span>
+
+        <span class="c1"># Save in HDF5 file</span>
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="n">type_group</span> <span class="o">=</span> <span class="n">hdf_file</span><span class="o">.</span><span class="n">require_group</span><span class="p">(</span><span class="n">element</span><span class="o">.</span><span class="n">type_name</span><span class="p">)</span> <span class="c1">#hdf_file[element.type_name]</span>
+            <span class="n">element_group</span> <span class="o">=</span> <span class="n">type_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">element</span><span class="o">.</span><span class="n">index</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">element</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span> 
+                                                  <span class="n">track_order</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">element_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;date&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">element</span><span class="o">.</span><span class="n">index</span>
+    
+    <span class="k">def</span> <span class="nf">_create_excel_workbook_and_sheet</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Workbook</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">        :return:</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+<span class="w">        </span><span class="sd">&#39;&#39;&#39; Create Excel-Workbook &#39;&#39;&#39;</span>
+        <span class="n">workbook</span> <span class="o">=</span> <span class="n">Workbook</span><span class="p">()</span>
+        <span class="n">worksheet</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">workbook</span><span class="o">.</span><span class="n">active</span>
+        <span class="n">worksheet</span><span class="o">.</span><span class="n">title</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;Overview&#39;</span>
+        <span class="n">worksheet</span><span class="o">.</span><span class="n">sheet_properties</span><span class="o">.</span><span class="n">tabColor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tab_color</span>
+        <span class="n">worksheet</span><span class="o">.</span><span class="n">protection</span><span class="o">.</span><span class="n">sheet</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Blattschutz aktivieren</span>
+
+<span class="w">        </span><span class="sd">&#39;&#39;&#39; Create Worksheet &#39;&#39;&#39;</span>
+        <span class="c1"># Header</span>
+        <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="s1">&#39;B2:H3&#39;</span><span class="p">)</span>
+        <span class="n">header_cell</span> <span class="o">=</span> <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B2&#39;</span><span class="p">]</span>
+        <span class="n">header_cell</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="s2">&quot;Experiment: Overview&quot;</span>
+        <span class="n">header_cell</span><span class="o">.</span><span class="n">alignment</span> <span class="o">=</span> <span class="n">Alignment</span><span class="p">(</span><span class="n">horizontal</span><span class="o">=</span><span class="s2">&quot;center&quot;</span><span class="p">,</span> <span class="n">vertical</span><span class="o">=</span><span class="s2">&quot;center&quot;</span><span class="p">)</span>
+        <span class="n">header_cell</span><span class="o">.</span><span class="n">font</span> <span class="o">=</span> <span class="n">Font</span><span class="p">(</span><span class="n">bold</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;FFFFFF&quot;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">14</span><span class="p">)</span>
+        <span class="n">header_cell</span><span class="o">.</span><span class="n">fill</span> <span class="o">=</span> <span class="n">PatternFill</span><span class="p">(</span><span class="n">start_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color1</span><span class="p">,</span> <span class="n">end_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color1</span><span class="p">,</span> <span class="n">fill_type</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Name and Layout</span>
+        <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="s1">&#39;B4:C4&#39;</span><span class="p">)</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B4&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Name&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;D4&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="s1">&#39;B5:B6&#39;</span><span class="p">)</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B5&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Date&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C5&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;created&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;D5&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">)</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C6&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;modified&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;D6&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">7</span><span class="p">):</span>
+            <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;D</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">:E</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;G</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">:H</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">,</span> <span class="s1">&#39;E&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;F&#39;</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">]:</span>
+                <span class="n">worksheet</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">col</span><span class="si">}{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">border</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_border</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;F4&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Layout&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;G4&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layout</span><span class="si">}</span><span class="s2"> Well Format&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;F5&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;..&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;F6&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;..&quot;</span>
+        <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;B4&#39;</span><span class="p">,</span> <span class="s1">&#39;B5&#39;</span><span class="p">,</span> <span class="s1">&#39;C5&#39;</span><span class="p">,</span> <span class="s1">&#39;C6&#39;</span><span class="p">,</span> <span class="s1">&#39;F4&#39;</span><span class="p">,</span> <span class="s1">&#39;F5&#39;</span><span class="p">,</span> <span class="s1">&#39;F6&#39;</span><span class="p">]:</span>
+            <span class="n">worksheet</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">fill</span> <span class="o">=</span> <span class="n">PatternFill</span><span class="p">(</span><span class="n">start_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color3</span><span class="p">,</span> <span class="n">end_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color3</span><span class="p">,</span>
+                                                <span class="n">fill_type</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Tabelle für Platmaps erstellen</span>
+        <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="s1">&#39;B10:B14&#39;</span><span class="p">)</span>
+        <span class="n">platemaps_header</span> <span class="o">=</span> <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B10&#39;</span><span class="p">]</span>
+        <span class="n">platemaps_header</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="s2">&quot;Platemaps&quot;</span>
+        <span class="n">platemaps_header</span><span class="o">.</span><span class="n">alignment</span> <span class="o">=</span> <span class="n">Alignment</span><span class="p">(</span><span class="n">horizontal</span><span class="o">=</span><span class="s2">&quot;center&quot;</span><span class="p">,</span> <span class="n">vertical</span><span class="o">=</span><span class="s2">&quot;center&quot;</span><span class="p">)</span>
+        <span class="c1"># platemaps_header.font = default_font</span>
+        <span class="n">platemaps_header</span><span class="o">.</span><span class="n">fill</span> <span class="o">=</span> <span class="n">PatternFill</span><span class="p">(</span><span class="n">start_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color2</span><span class="p">,</span> <span class="n">end_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color2</span><span class="p">,</span>
+                                            <span class="n">fill_type</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">15</span><span class="p">):</span>
+            <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;C</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">:D</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">worksheet</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;C</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">fill</span> <span class="o">=</span> <span class="n">PatternFill</span><span class="p">(</span><span class="n">start_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color3</span><span class="p">,</span> <span class="n">end_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color3</span><span class="p">,</span>
+                                                    <span class="n">fill_type</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">]:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">worksheet</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">col</span><span class="si">}{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">border</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_border</span>
+            <span class="c1"># ws[f&#39;C{row}&#39;].font = default_font</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C10&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Name&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C11&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Date&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C12&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Cell lines&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C13&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Compounds&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C14&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;index&quot;</span>
+
+        <span class="c1"># Tabelle für Results erstellen</span>
+        <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="s1">&#39;B17:B21&#39;</span><span class="p">)</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B17&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Results&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B17&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">alignment</span> <span class="o">=</span> <span class="n">Alignment</span><span class="p">(</span><span class="n">horizontal</span><span class="o">=</span><span class="s2">&quot;center&quot;</span><span class="p">,</span> <span class="n">vertical</span><span class="o">=</span><span class="s2">&quot;center&quot;</span><span class="p">)</span>
+        <span class="c1"># self.worksheet[&#39;B17&#39;].font = default_font</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B17&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">fill</span> <span class="o">=</span> <span class="n">PatternFill</span><span class="p">(</span><span class="n">start_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color2</span><span class="p">,</span> <span class="n">end_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color2</span><span class="p">,</span>
+                                            <span class="n">fill_type</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">17</span><span class="p">,</span> <span class="mi">22</span><span class="p">):</span>
+            <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;C</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">:D</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">worksheet</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;C</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">fill</span> <span class="o">=</span> <span class="n">PatternFill</span><span class="p">(</span><span class="n">start_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color3</span><span class="p">,</span> <span class="n">end_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color3</span><span class="p">,</span>
+                                                    <span class="n">fill_type</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">]:</span>
+                <span class="n">worksheet</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">col</span><span class="si">}{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">border</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_border</span>
+            <span class="c1"># ws[f&#39;C{row}&#39;].font = default_font</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C17&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Name&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C18&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Date&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C19&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Platemap&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C20&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Metric&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C21&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;index&quot;</span>
+
+        <span class="c1"># Tabelle für Analysis erstellen</span>
+        <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="s1">&#39;B24:B28&#39;</span><span class="p">)</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B24&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Analysis&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B24&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">alignment</span> <span class="o">=</span> <span class="n">Alignment</span><span class="p">(</span><span class="n">horizontal</span><span class="o">=</span><span class="s2">&quot;center&quot;</span><span class="p">,</span> <span class="n">vertical</span><span class="o">=</span><span class="s2">&quot;center&quot;</span><span class="p">)</span>
+        <span class="c1"># self.worksheet[&#39;B24&#39;].font = default_font</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;B24&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">fill</span> <span class="o">=</span> <span class="n">PatternFill</span><span class="p">(</span><span class="n">start_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color2</span><span class="p">,</span> <span class="n">end_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color2</span><span class="p">,</span>
+                                            <span class="n">fill_type</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">24</span><span class="p">,</span> <span class="mi">29</span><span class="p">):</span>
+            <span class="n">worksheet</span><span class="o">.</span><span class="n">merge_cells</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;C</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">:D</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">worksheet</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;C</span><span class="si">{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">fill</span> <span class="o">=</span> <span class="n">PatternFill</span><span class="p">(</span><span class="n">start_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color3</span><span class="p">,</span> <span class="n">end_color</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_table_color3</span><span class="p">,</span>
+                                                    <span class="n">fill_type</span><span class="o">=</span><span class="s2">&quot;solid&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">]:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">worksheet</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">col</span><span class="si">}{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">border</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_border</span>
+            <span class="c1"># ws[f&#39;C{row}&#39;].font = default_font</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C24&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Name&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C25&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Date&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C26&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Results&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C27&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Parameters&quot;</span>
+        <span class="n">worksheet</span><span class="p">[</span><span class="s1">&#39;C28&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;index&quot;</span>
+
+        <span class="c1"># Rahmen und Formatierung anwenden</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">,</span> <span class="s1">&#39;E&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">]:</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">7</span><span class="p">):</span>
+                <span class="n">worksheet</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">col</span><span class="si">}{</span><span class="n">row</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">border</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_border</span>
+
+        <span class="k">return</span> <span class="n">workbook</span>
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span><span class="sa">f</span><span class="s1">&#39;EXPERIMENT: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s1">  (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="si">}</span><span class="s1"> Well Plate)</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span>
+                <span class="sa">f</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1"> Elements:&#39;</span> <span class="o">+</span>  <span class="c1">#({len(self.element_dict[&quot;Platemap&quot;])+len(self.element_dict[&quot;Result&quot;])+len(self.element_dict[&quot;Analysis&quot;])}): &#39;+</span>
+                <span class="sa">f</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1"> &gt; Results(</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="p">)</span><span class="si">}</span><span class="s1">): &#39;</span> <span class="o">+</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                    <span class="n">element</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span> <span class="o">+</span>
+                <span class="sa">f</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1"> &gt; AnalysisJobs(</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span><span class="p">)</span><span class="si">}</span><span class="s1">): &#39;</span> <span class="o">+</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                    <span class="n">element</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span><span class="o">.</span><span class="n">values</span><span class="p">())))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">timepoints</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">,</span> <span class="nb">list</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get experiment timepoints in absolute and relative format.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            tuple: (absolute_times, relative_times) where:</span>
+<span class="sd">                absolute_times: List of datetime strings</span>
+<span class="sd">                relative_times: List of hours from experiment start</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[],</span> <span class="p">[]</span>
+        
+        <span class="c1"># Get timepoints from first result</span>
+        <span class="n">first_result</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">first_result</span><span class="o">.</span><span class="n">time_points_array</span><span class="p">,</span> 
+                <span class="n">first_result</span><span class="o">.</span><span class="n">relative_time_array</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Experiment.delete">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.experiment.Experiment.delete">[docs]</a>
+    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete a Result or Analysis from the experiment.</span>
+<span class="sd">        </span>
+<span class="sd">        Automatically determines element type based on name and removes it from</span>
+<span class="sd">        both the experiment&#39;s dictionaries and the HDF5 file.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            name: Name of the element to delete</span>
+<span class="sd">            </span>
+<span class="sd">        Raises:</span>
+<span class="sd">            KeyError: If element with given name is not found</span>
+<span class="sd">            ValueError: If name exists in both Results and Analyses</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Check where the element exists</span>
+        <span class="n">in_results</span> <span class="o">=</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span>
+        <span class="n">in_analyses</span> <span class="o">=</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">in_results</span> <span class="ow">or</span> <span class="n">in_analyses</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No Result or Analysis found with name &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            
+        <span class="k">if</span> <span class="n">in_results</span> <span class="ow">and</span> <span class="n">in_analyses</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ambiguous name &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; - exists in both Results and Analyses. &quot;</span>
+                            <span class="s2">&quot;Use delete_result() or delete_analysis() instead.&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># Get element and its type</span>
+        <span class="k">if</span> <span class="n">in_results</span><span class="p">:</span>
+            <span class="n">element</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">element_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span>
+            <span class="n">element_type</span> <span class="o">=</span> <span class="s1">&#39;Result&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">element</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">element_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span>
+            <span class="n">element_type</span> <span class="o">=</span> <span class="s1">&#39;Analysis&#39;</span>
+        
+        <span class="c1"># Remove from dictionary</span>
+        <span class="k">del</span> <span class="n">element_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        
+        <span class="c1"># Remove from HDF5 file</span>
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">element</span><span class="o">.</span><span class="n">hdf5_key</span> <span class="ow">in</span> <span class="n">hdf_file</span><span class="p">:</span>
+                <span class="k">del</span> <span class="n">hdf_file</span><span class="p">[</span><span class="n">element</span><span class="o">.</span><span class="n">hdf5_key</span><span class="p">]</span>
+                
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">element_type</span><span class="si">}</span><span class="s2"> &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; successfully deleted&quot;</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_delete_element</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">element_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">element_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;Result&#39;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete a Result or Analysis from the experiment.</span>
+<span class="sd">        </span>
+<span class="sd">        Removes the element from both the experiment&#39;s dictionaries and the HDF5 file.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            element_name: Name of the Result/Analysis to delete</span>
+<span class="sd">            element_type: Type of element to delete (&#39;Result&#39; or &#39;Analysis&#39;)</span>
+<span class="sd">            </span>
+<span class="sd">        Raises:</span>
+<span class="sd">            ValueError: If element_type is invalid or element doesn&#39;t exist</span>
+<span class="sd">            KeyError: If element with given name is not found</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">element_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;Result&#39;</span><span class="p">,</span> <span class="s1">&#39;Analysis&#39;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;element_type must be &#39;Result&#39; or &#39;Analysis&#39;&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># Get appropriate dictionary</span>
+        <span class="n">element_dict</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">results_dict</span> <span class="k">if</span> <span class="n">element_type</span> <span class="o">==</span> <span class="s1">&#39;Result&#39;</span> 
+                       <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">analyses_dict</span><span class="p">)</span>
+        
+        <span class="c1"># Check if element exists</span>
+        <span class="k">if</span> <span class="n">element_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">element_dict</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">element_type</span><span class="si">}</span><span class="s2"> &#39;</span><span class="si">{</span><span class="n">element_name</span><span class="si">}</span><span class="s2">&#39; not found&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># Get element&#39;s index for HDF5 path</span>
+        <span class="n">element</span> <span class="o">=</span> <span class="n">element_dict</span><span class="p">[</span><span class="n">element_name</span><span class="p">]</span>
+        <span class="n">element_hdf5_key</span> <span class="o">=</span> <span class="n">element</span><span class="o">.</span><span class="n">hdf5_key</span>
+        
+        <span class="c1"># Remove from dictionary</span>
+        <span class="k">del</span> <span class="n">element_dict</span><span class="p">[</span><span class="n">element_name</span><span class="p">]</span>
+        
+        <span class="c1"># Remove from HDF5 file</span>
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hdf5_path</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">hdf_file</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">element_hdf5_key</span> <span class="ow">in</span> <span class="n">hdf_file</span><span class="p">:</span>
+                <span class="k">del</span> <span class="n">hdf_file</span><span class="p">[</span><span class="n">element_hdf5_key</span><span class="p">]</span>
+            
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">element_type</span><span class="si">}</span><span class="s2"> &#39;</span><span class="si">{</span><span class="n">element_name</span><span class="si">}</span><span class="s2">&#39; successfully deleted&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Experiment.delete_result">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.experiment.Experiment.delete_result">[docs]</a>
+    <span class="k">def</span> <span class="nf">delete_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete a Result from the experiment.</span>
+<span class="sd">        </span>
+<span class="sd">        Convenience method wrapping delete_element for Results.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            result_name: Name of the Result to delete</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_delete_element</span><span class="p">(</span><span class="n">result_name</span><span class="p">,</span> <span class="s1">&#39;Result&#39;</span><span class="p">)</span></div>
+
+        
+<div class="viewcode-block" id="Experiment.delete_analysis">
+<a class="viewcode-back" href="../../../SpheroidPy.experiment.html#SpheroidPy.experiment.experiment.Experiment.delete_analysis">[docs]</a>
+    <span class="k">def</span> <span class="nf">delete_analysis</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">analysis_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete an Analysis from the experiment.</span>
+<span class="sd">        </span>
+<span class="sd">        Convenience method wrapping delete_element for Analyses.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            analysis_name: Name of the Analysis to delete</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_delete_element</span><span class="p">(</span><span class="n">analysis_name</span><span class="p">,</span> <span class="s1">&#39;Analysis&#39;</span><span class="p">)</span></div>
+</div>
+
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">exp</span> <span class="o">=</span> <span class="n">Experiment</span><span class="p">(</span><span class="s1">&#39;Test&#39;</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;TestExp&#39;</span><span class="p">))</span>
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Cedric Heuermann.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

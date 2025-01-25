@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Manual &mdash; SpheroidPy 0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=17bff7d0" />
+
+  
+    <link rel="shortcut icon" href="_static/SpheroidPy_logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=2709fde1"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Examples" href="examples.html" />
+    <link rel="prev" title="Getting started" href="getting_started.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html">
+            
+              <img src="_static/SpheroidPy_logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">User Manual</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#basic-usage">Basic usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#defining-the-experiment">Defining the Experiment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-a-result">Adding a Result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#visualising-your-results">Visualising your Results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#performing-simple-analyses">Performing simple Analyses</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#advanced-usage">Advanced usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#proliferation-assays">Proliferation Assays</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#cytotoxicity-assays">Cytotoxicity Assays</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="SpheroidPy.html">SpheroidPy package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">SpheroidPy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">User Manual</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/user_manual.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="user-manual">
+<h1>User Manual<a class="headerlink" href="#user-manual" title="Link to this heading"></a></h1>
+<section id="basic-usage">
+<h2>Basic usage<a class="headerlink" href="#basic-usage" title="Link to this heading"></a></h2>
+<p>We here describe the typical workflow for importing, segmentating and analyzing spheroid microscopy data using <a class="reference internal" href="SpheroidPy.html#module-SpheroidPy" title="SpheroidPy"><code class="xref py py-mod docutils literal notranslate"><span class="pre">SpheroidPy</span></code></a>.
+Throughout this section, we assume that the package has been imported using <code class="code docutils literal notranslate"><span class="pre">import</span> <span class="pre">SpheroidPy</span></code>.</p>
+<section id="defining-the-experiment">
+<h3>Defining the Experiment<a class="headerlink" href="#defining-the-experiment" title="Link to this heading"></a></h3>
+<p>All data concerning one type of assay is managed using the <code class="xref py py-class docutils literal notranslate"><span class="pre">Experiment</span></code> class.
+Additionally, all information from performed tasks and analyses is also saved in a hdf5-file for later usage.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">experiment</span> <span class="o">=</span> <span class="n">SpheroidPy</span><span class="o">.</span><span class="n">Experiment</span><span class="p">(</span><span class="s1">&#39;Experiment Name&#39;</span><span class="p">,</span> <span class="n">well_layout</span><span class="p">,</span> <span class="s1">&#39;path/to/data&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Text</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">experiment</span> <span class="o">=</span> <span class="n">SpheroidPy</span><span class="o">.</span><span class="n">Experiment</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="s1">&#39;path/to/hdf5/file&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The state of the system is described in a discretized geometry, also known as a <cite>grid</cite>.
+The package focuses on simple geometries, which work well for the employed finite
+difference scheme.
+Grids are defined by instance of various classes that capture the symmetries of the
+underlying space.
+In particular, the package offers Cartesian grids of <cite>1</cite> to <cite>3</cite> dimensions via
+<code class="xref py py-class docutils literal notranslate"><span class="pre">CartesianGrid</span></code>, as well as curvilinear coordinate for
+spherically symmetric systems in two dimension (<code class="xref py py-class docutils literal notranslate"><span class="pre">PolarSymGrid</span></code>)
+and three dimensions (<code class="xref py py-class docutils literal notranslate"><span class="pre">SphericalSymGrid</span></code>), as well as the
+special class <code class="xref py py-class docutils literal notranslate"><span class="pre">CylindricalSymGrid</span></code> for a cylindrical geometry
+which is symmetric in the angle.</p>
+<p>All grids allow to set the size of the underlying geometry and the number of support
+points along each axis, which determines the spatial resolution.
+Moreover, most grids support periodic boundary conditions.
+For example, a rectangular grid with one periodic boundary condition can be specified
+as</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grid</span> <span class="o">=</span> <span class="n">pde</span><span class="o">.</span><span class="n">CartesianGrid</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">]],</span> <span class="p">[</span><span class="mi">20</span><span class="p">,</span> <span class="mi">10</span><span class="p">],</span> <span class="n">periodic</span><span class="o">=</span><span class="p">[</span><span class="kc">True</span><span class="p">,</span> <span class="kc">False</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>This grid will have a rectangular shape of 10x5 with square unit cells of side length
+<cite>0.5</cite>.
+Note that the grid will only be periodic in the <cite>x</cite>-direction.</p>
+</section>
+<section id="adding-a-result">
+<h3>Adding a Result<a class="headerlink" href="#adding-a-result" title="Link to this heading"></a></h3>
+<p>Fields specifying the values at the discrete points of the grid defined in the previous
+section.
+Most PDEs discussed in the package describe a scalar variable, which can be encoded th
+class <code class="xref py py-class docutils literal notranslate"><span class="pre">ScalarField</span></code>.
+However, tensors with rank 1 (vectors) and rank 2 are also supported using
+<code class="xref py py-class docutils literal notranslate"><span class="pre">VectorField</span></code> and
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor2Field</span></code>, respectively.
+In any case, a field is initialized using a pre-defined grid, e.g.,
+<code class="code docutils literal notranslate"><span class="pre">field</span> <span class="pre">=</span> <span class="pre">pde.ScalarField(grid)</span></code>.
+Optional values allow to set the value of the grid, as well as a label that is later
+used in plotting, e.g., <code class="code docutils literal notranslate"><span class="pre">field1</span> <span class="pre">=</span> <span class="pre">pde.ScalarField(grid,</span> <span class="pre">data=1,</span> <span class="pre">label=&quot;Ones&quot;)</span></code>.
+Moreover, fields can be initialized randomly
+(<code class="code docutils literal notranslate"><span class="pre">field2</span> <span class="pre">=</span> <span class="pre">pde.ScalarField.random_normal(grid,</span> <span class="pre">mean=0.5)</span></code>) or from a mathematical
+expression, which may depend on the coordinates of the grid
+(<code class="code docutils literal notranslate"><span class="pre">field3</span> <span class="pre">=</span> <span class="pre">pde.ScalarField.from_expression(grid,</span> <span class="pre">&quot;x</span> <span class="pre">*</span> <span class="pre">y&quot;)</span></code>).</p>
+<p>All field classes support basic arithmetic operations and can be used much like
+numpy arrays.
+Moreover, they have methods for applying differential operators,
+e.g., the result of applying the Laplacian to a scalar field is returned by
+calling the method <code class="xref py py-meth docutils literal notranslate"><span class="pre">laplace()</span></code>, which
+returns another instance of <code class="xref py py-class docutils literal notranslate"><span class="pre">ScalarField</span></code>, whereas
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">gradient()</span></code> returns a
+<code class="xref py py-class docutils literal notranslate"><span class="pre">VectorField</span></code>.
+Combining these functions with ordinary arithmetics on fields allows to
+represent the right hand side of many partial differential equations that appear
+in physics.
+Importantly, the differential operators work with flexible boundary conditions.</p>
+</section>
+<section id="visualising-your-results">
+<h3>Visualising your Results<a class="headerlink" href="#visualising-your-results" title="Link to this heading"></a></h3>
+<p>Text</p>
+</section>
+<section id="performing-simple-analyses">
+<h3>Performing simple Analyses<a class="headerlink" href="#performing-simple-analyses" title="Link to this heading"></a></h3>
+<p>PDEs are also instances of special classes and a number of classical PDEs are already
+pre-defined in the module <code class="xref py py-mod docutils literal notranslate"><span class="pre">pde.pdes</span></code>.
+Moreover, the special class <code class="xref py py-class docutils literal notranslate"><span class="pre">PDE</span></code> allows defining PDEs by simply
+specifying the expression on their right hand side.
+To see how this works in practice, let us consider the <a class="reference external" href="https://en.wikipedia.org/wiki/Kuramoto–Sivashinsky_equation">Kuramoto–Sivashinsky equation</a>,
+<span class="math notranslate nohighlight">\(\partial_t u = - \nabla^4 u - \nabla^2 u - \frac{1}{2} |\nabla u|^2\)</span>,
+which describes the time evolution of a scalar field <span class="math notranslate nohighlight">\(u\)</span>.
+A simple implementation of this equation reads</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">eq</span> <span class="o">=</span> <span class="n">pde</span><span class="o">.</span><span class="n">PDE</span><span class="p">({</span><span class="s2">&quot;u&quot;</span><span class="p">:</span> <span class="s2">&quot;-gradient_squared(u) / 2 - laplace(u + laplace(u))&quot;</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>Here, the argument defines the evolution rate for all fields (in this case
+only <span class="math notranslate nohighlight">\(u\)</span>).
+The expression on the right hand side can contain typical mathematical functions
+and the operators defined by the package.</p>
+<p>Moreover, a movie of the simulation can be created using <code class="xref py py-func docutils literal notranslate"><span class="pre">movie()</span></code>, i.e., by calling
+<code class="code docutils literal notranslate"><span class="pre">pde.movie(storage,</span> <span class="pre">filename=FILE)</span></code>, where <cite>FILE</cite> determines where the movie is
+written.</p>
+</section>
+</section>
+<section id="advanced-usage">
+<h2>Advanced usage<a class="headerlink" href="#advanced-usage" title="Link to this heading"></a></h2>
+<section id="proliferation-assays">
+<h3>Proliferation Assays<a class="headerlink" href="#proliferation-assays" title="Link to this heading"></a></h3>
+<p>Besides normal usage and simple plots, <a class="reference internal" href="SpheroidPy.html#module-SpheroidPy" title="SpheroidPy"><code class="xref py py-mod docutils literal notranslate"><span class="pre">SpheroidPy</span></code></a> also allows for more advanced analyses for Proliferation Data.</p>
+</section>
+<section id="cytotoxicity-assays">
+<h3>Cytotoxicity Assays<a class="headerlink" href="#cytotoxicity-assays" title="Link to this heading"></a></h3>
+<p>Sometimes is suffices to plot the final result, which can be done using
+<code class="code docutils literal notranslate"><span class="pre">result.plot()</span></code>.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="getting_started.html" class="btn btn-neutral float-left" title="Getting started" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="examples.html" class="btn btn-neutral float-right" title="Examples" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Cedric Heuermann.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
