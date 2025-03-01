@@ -1,5 +1,4 @@
 /.github/
 /.conda/
 /.ipynb_checkpoints/
-/SpheroidPy/weights/
-/docs/
+/docs/build

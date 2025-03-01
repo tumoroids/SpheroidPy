@@ -1,1 +1,0 @@
-from SpheroidPy.spheroid.spheroid_image import SpheroidImage
