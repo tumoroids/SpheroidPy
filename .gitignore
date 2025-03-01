@@ -1,3 +1,5 @@
-.DS_Store
-.docs/build
-./SpheroidPy/weights
+/.github/
+/.conda/
+/.ipynb_checkpoints/
+/SpheroidPy/weights/
+/docs/

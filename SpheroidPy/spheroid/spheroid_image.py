@@ -271,7 +271,6 @@ class SpheroidImage:
                     interp_func = interp1d( np.linspace(0, 1, len(intensity_values)), intensity_values, kind='cubic', bounds_error=False, fill_value=0)
                     intensity_interpolation[color].append(interp_func)
             except:
-                print('no segmentation found!')
                 pass
 
         # Compute mean radius
@@ -332,7 +331,7 @@ class SpheroidImage:
         radius = radial_profile_dict['mean_radius']
         intensities_dict = radial_profile_dict['intensity_profiles']
 
-        self.analysis_param_dict['structure'] = {'radial_profiles': intensities_dict}
+        self.analysis_results['structure'] = {'radial_profiles': intensities_dict}
 
         x_necrotic, x_inhibited = None, None
 
@@ -351,8 +350,8 @@ class SpheroidImage:
 
             min_max_inflection_dict = find_inflection_point( y, x, sigma=3 )
             x_inhibited,_,_ = min_max_inflection_dict['inflection_min']
-
-        return {'outer': radius, 'inhibited': x_inhibited, 'necrotic': x_necrotic}
+        self.analysis_results['functional_radii'] = {'outer': radius*(self.radius/radius), 'inhibited': x_inhibited*(self.radius/radius) if x_inhibited is not None else None, 'necrotic': x_necrotic*(self.radius/radius) if x_necrotic is not None else None}
+        return self.analysis_results['functional_radii']
 
     @property
     def scaled_contour(self) -> np.ndarray:

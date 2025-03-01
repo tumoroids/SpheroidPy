@@ -391,72 +391,6 @@ class Result(Base):
         for spheroid_series in self.spheroid_dict.values():
             spheroid_series._result = self
 
-    @property
-    def nr_images(self) -> pd.DataFrame:
-
-        data = {
-            'index': ['A', '', '', '', 'B', '', '', '', 'C', '', '', '', 'D', '', '', '', 'E', '', '', '', 'F', '', '',
-                      '', 'G', '', '', '', 'H', '', '', ''],
-            1: [np.nan] * 8 * 4,
-            2: [np.nan] * 8 * 4,
-            3: [np.nan] * 8 * 4,
-            4: [np.nan] * 8 * 4,
-            5: [np.nan] * 8 * 4,
-            6: [np.nan] * 8 * 4,
-            7: [np.nan] * 8 * 4,
-            8: [np.nan] * 8 * 4,
-            9: [np.nan] * 8 * 4,
-            10: [np.nan] * 8 * 4,
-            11: [np.nan] * 8 * 4,
-            12: [np.nan] * 8 * 4,
-            'Channel': ['brightfield', 'fluorescence_green', 'fluorescence_red', 'fluorescence_blue', 'brightfield',
-                        'fluorescence_green', 'fluorescence_red', 'fluorescence_blue', 'brightfield',
-                        'fluorescence_green', 'fluorescence_red', 'fluorescence_blue', 'brightfield',
-                        'fluorescence_green', 'fluorescence_red', 'fluorescence_blue', 'brightfield',
-                        'fluorescence_green', 'fluorescence_red', 'fluorescence_blue', 'brightfield',
-                        'fluorescence_green', 'fluorescence_red', 'fluorescence_blue', 'brightfield',
-                        'fluorescence_green', 'fluorescence_red', 'fluorescence_blue', 'brightfield',
-                        'fluorescence_green', 'fluorescence_red', 'fluorescence_blue'],
-        }
-
-        image_nr_dict = {}
-        channel_nr_dict = {'brightfield': 0, 'fluorescence_green': 1, 'fluorescence_red': 2, 'fluorescence_blue': 3}
-        for channel in self.files_dict:
-            for well in self.files_dict[channel]:
-                letter_nr, col = int(ord(well[0].lower()) - ord('a')), int(well[1:])
-                row = letter_nr * 4 + channel_nr_dict[channel]
-
-                nr_images = len(self.files_dict[channel][well])
-                data[col][row] = str(nr_images)
-
-        # Function to style rows with colors and borders
-        def colorize_and_add_borders(row, index, row_group_count=4):
-            # Color palette for groups
-            colors = ["#C8C8C8", "#D5FFCC", "#FFCCCC", "#CCE5FF"]  # Gray, Green, Red, Blue
-            group_index = index % row_group_count  # Grouping index
-            color = colors[group_index]  # Assign color
-
-            # Set background color
-            styles = [f"background-color: {color}; border-right: 2px solid black;" for _ in row]
-
-            # Add border if it's the last row in the group
-            if (index + 1) % row_group_count == 0:
-                styles = [style + " border-bottom: 2px solid black;" for style in styles]
-
-            return styles
-
-        # Apply styling function to the DataFrame
-        def style_dataframe(df):
-            return df.style.apply(
-                lambda row: colorize_and_add_borders(row, row.name), axis=1
-            )
-
-        df = pd.DataFrame(data)
-        # Replace NaNs with empty strings
-        df.fillna("", inplace=True)
-        pd.options.display.float_format = '{:d}'.format  # Deaktiviert die Anzeige als float
-        return style_dataframe(pd.DataFrame(df))
-
     @staticmethod
     def _process_segmentation_well(args):
         """Process segmentation for a single well.
@@ -653,48 +587,38 @@ class Result(Base):
         """
         return self.time_points_array, self.relative_time_array
 
-    @property
-    def replicates(self) -> dict[str, SpheroidCollection]:
-        """Get replicate groups based on platemap conditions.
-
+    def replicates(self, element_name: str | None = None) -> dict:
+        """Get replicate groups from platemap.
+        
+        Args:
+            element_name: Optional name of cell line or compound to filter by
+            
         Returns:
-            Dictionary mapping condition strings to SpheroidCollection objects
-            representing spheroids with the same experimental conditions.
+            Dictionary mapping conditions to SpheroidCollection objects
         """
-        replicates_dict = {}  # {condition: SpheroidCollection}
-
-        # Group spheroids by condition from platemap
-        for key in self.platemap.replicates.keys():
-            # Create condition string from platemap key
-            condition = ', '.join([f"{item[0]}: {item[1]}" for item in key])
-            wells_list = self.platemap.replicates[key]
-
-            # Get valid wells that exist in spheroid_dict
-            valid_wells = [key for key in wells_list if key in self.spheroid_dict]
-
-            if not valid_wells:
-                print(f"Warning: No valid wells found for condition '{condition}' in result '{self.name}'")
-                continue
-
-            # Create spheroid list for this condition
-            spheroids = [self.spheroid_dict[well] for well in valid_wells]
-
-            # Create or update SpheroidCollection
-            if condition not in replicates_dict:
-                replicates_dict[condition] = SpheroidCollection(
-                    name=condition,
-                    spheroid_list=spheroids,
+        replicate_wells = self.platemap.replicates(element_name)
+        collections = {}
+        
+        for condition, wells in replicate_wells.items():
+            # Get valid spheroid series for these wells
+            spheroid_list = [self.spheroid_dict[well] 
+                           for well in wells 
+                           if well in self.spheroid_dict]
+            
+            if spheroid_list:
+                collections[condition] = SpheroidCollection(
+                    name=str(condition),
+                    spheroid_list=spheroid_list,
                     result=self,
                     hdf5_path=self.hdf5_path
                 )
-            else:
-                replicates_dict[condition].add_replicate_group(spheroids, self)
-
-        return replicates_dict
+        
+        return collections
 
     def metric(self, name: str = 'radius', mean: bool = False,
                plot: bool = False, skip_nan: bool = False,
-               interpolate: bool = True, ignore_border: bool = True) -> pd.DataFrame | tuple:
+               interpolate: bool = True, ignore_border: bool = True,
+               element_name: str | None = None) -> pd.DataFrame | tuple:
         """Calculate specified metric across wells and timepoints.
 
         Computes metrics like radius or area for each well/timepoint and optionally
@@ -707,474 +631,120 @@ class Result(Base):
             skip_nan: Whether to exclude NaN values from plots
             interpolate: Whether to interpolate missing timepoints
             ignore_border: Whether to exclude spheroids touching image border
+            element_name: Optional name of cell line or compound to filter replicates by
 
         Returns:
             DataFrame containing metric values, optionally with mean/std across replicates
-
-        Raises:
-            Exception: If no data has been loaded
         """
-
         if not self.data_has_been_loaded:
             raise Exception('No Data has been loaded so far!')
 
-        # check if it has been computed previously
-        if name in self.metric_dfs:
-            result_df = self.metric_dfs[name]
+        # Check if metric has been computed previously
+        metric_key = f"{name}_{'mean' if mean else 'raw'}"
+        if metric_key in self.metric_dfs and element_name is None:
+            result_df = self.metric_dfs[metric_key]
         else:
-            print('start')
-            wells = list(self.files_dict['brightfield'].keys())
-            wells.sort(key=lambda x: (int(x[1:]), x[0]))
-            result_df = pd.DataFrame(float(np.nan), index=self.relative_time_array, columns=wells)
-            name_split_array = name.split('_')
-            if name_split_array[0] == 'fluorescence':
-                result_df_cumulative = result_df.copy()
-                result_df_mean = result_df.copy()
-
-            # Convert list of wells to string for tqdm description
-            wells_list = list(self.spheroid_dict.keys())
-
-            # Use context manager for tqdm
-            from contextlib import closing
-            with closing(tqdm(range(len(wells_list)),
-                              desc=f'Processing wells',
-                              leave=True)) as pbar:
-                # Process wells
-                for i, index in zip(pbar, wells_list):
-                    spheroid_series = self.spheroid_dict[index]
-                    for timepoint in list(spheroid_series.spheroid_image_dict.keys()):
-                        rel_timepoint = (datetime.strptime(timepoint, '%Y-%m-%d %H:%M:%S') - datetime.strptime(
-                            self.time_points_array[0], '%Y-%m-%d %H:%M:%S')).total_seconds() / 3600
-                        spheroid_image = spheroid_series.spheroid_image_dict[timepoint]
-
-                        if name == 'radius':
-                            result_df.loc[rel_timepoint, index] = spheroid_image.radius
-                        if name == 'area':
-                            result_df.loc[rel_timepoint, index] = spheroid_image.area
-
-                        # other options: assume fluorescence :)
-                        if name_split_array[0] == 'fluorescence':
-                            color = name_split_array[1]
-                            try:
-                                metric_fluorescence_tuple = spheroid_image.metric_fluorescence(color, ignore_border)
-                                result_df_cumulative.loc[rel_timepoint, index], result_df_mean.loc[
-                                    rel_timepoint, index] = metric_fluorescence_tuple
-                            except:
-                                result_df_cumulative.loc[rel_timepoint, index] = None
-                                result_df_mean.loc[rel_timepoint, index] = None
-
-                pbar.close()  # Explicitly close the progress bar
-
-            if name_split_array[0] == 'fluorescence':
-                self.metric_dfs[f'fluorescence_{name_split_array[1]}_mean'] = result_df_mean
-                self.metric_dfs[f'fluorescence_{name_split_array[1]}_cumulative'] = result_df_cumulative
-                if name_split_array[2] == 'mean':
-                    result_df = result_df_mean
-                if name_split_array[2] == 'cumulative':
-                    result_df = result_df_cumulative
+            if mean:
+                # Calculate metrics using SpheroidCollections (replicates)
+                collection_dfs = []
+                for collection in self.replicates(element_name).values():
+                    df = collection.calculate_metric(
+                        name=name,
+                        mean=True,
+                        interpolate=interpolate,
+                        ignore_border=ignore_border,
+                        skip_nan=skip_nan
+                    )
+                    collection_dfs.append(df)
+                
+                # Combine all collection results
+                result_df = pd.concat(collection_dfs, axis=1)
             else:
-                self.metric_dfs[name] = result_df
+                # Calculate metrics for each spheroid series
+                all_dfs = []
+                for well, spheroid_series in self.spheroid_dict.items():
+                    df = spheroid_series.calculate_metric(
+                        name=name,
+                        interpolate=interpolate,
+                        ignore_border=ignore_border
+                    )
+                    # Rename the column to use well ID directly instead of "Spheroid-" prefix
+                    df.columns = [well]
+                    all_dfs.append(df)
 
-        # result_df = self.metric_dfs['fluorescence_red_cumulative']/self.metric_dfs['fluorescence_green_cumulative']
+                # Combine all individual DataFrames
+                result_df = pd.concat(all_dfs, axis=1)
+            
+            # Store for future use only if not filtered by element
+            if element_name is None:
+                self.metric_dfs[metric_key] = result_df
 
-        if interpolate:
-            # Interpolieren der NaN-Werte mit linearer Methode
-            result_df = result_df.interpolate(method='linear', axis=0, limit_direction='both')
-
-        if mean:
-            ''' return mean/std values for every replicate instead of for every Well '''
-            for key in list(self.platemap.replicates.keys()):
-                condition = ', '.join([f"{item[0]}: {item[1]}" for item in key])
-                wells_list = self.platemap.replicates[key]
-                valid_wells = [key for key in wells_list if key in result_df.columns]
-                try:
-                    results_mean_df[(condition, 'mean')] = result_df[valid_wells].mean(axis=1, skipna=True)
-                    results_mean_df[(condition, 'std')] = result_df[valid_wells].std(axis=1, skipna=True)
-                except:
-                    results_mean_df = pd.DataFrame({
-                        (condition, 'mean'): result_df[valid_wells].mean(axis=1, skipna=True),
-                        (condition, 'std'): result_df[valid_wells].std(axis=1, skipna=True)
-                    })
-            if plot:  # seperat Plot-Style if mean is desired
-                df_reshaped = np.array(results_mean_df.columns).reshape(int(len(list(results_mean_df.columns)) / 2), 2)
-                for tupel_ in df_reshaped:
-                    for el in tupel_:
-                        if el[-1] == 'mean':
-                            concentration = el[0]
-                            mean_array = results_mean_df[el]
-                        elif el[-1] == 'std':
-                            std_array = results_mean_df[el]
-                    x = np.array(results_mean_df.index.to_list()) / 24
-                    if skip_nan:
-                        valid_indices = ~np.isnan(mean_array)
-
-                        # Arrays filtern
-                        mean_array = mean_array[valid_indices]
-                        std_array = std_array[valid_indices]
-                        x = x[valid_indices]
-
-                    plt.fill_between(x, mean_array - std_array, mean_array + std_array,
-                                     alpha=0.5, color='gray')
-                    plt.plot(x, mean_array, label=f"{concentration}")
-
-                    # plt.errorbar(np.array(df.index.to_list())/24, mean_array, yerr=std_array, label=f"Hep3B: {concentration}", fmt='-o', capsize=5)
-
-                plt.xlabel('Time [d]')
-                # plt.ylabel(rf'{self.plot_name_dict[name]}')
-                plt.ylim(0)
-                # plt.xlim(1, 21)
-                plt.legend(fontsize=5)
-                plt.show()
-            result_df = results_mean_df
-
-        elif plot:
-            ''' additional Plot of Result '''
-            for index in list(result_df.keys()):
-                if skip_nan:
-                    valid_indices = ~np.isnan(result_df[index])
-                    # Arrays filtern
-                    x = (np.array(result_df.index.to_list()) / 24)[valid_indices]
-                    y = (result_df[index])[valid_indices]
-                else:
-                    x = (np.array(result_df.index.to_list()) / 24)
-                    y = (result_df[index])
-                plt.plot(x, y, label=f"{index}")
-            plt.xlabel('Time [d]')
-            # plt.ylabel(rf'{self.plot_name_dict[name]}')
-            plt.ylim(0)
-            plt.xlim(1, 21)
-            # plt.legend()
-            plt.show()
-            plt.show()
+        # Handle plotting if requested
+        if plot:
+            self._plot_metric(result_df, mean, skip_nan, name)
 
         return result_df
 
-    def interactive(self, plot_anzahl: int):
-        """Launch interactive visualization and analysis interface.
+    def _plot_metric(self, df: pd.DataFrame, mean: bool, skip_nan: bool, name: str):
+        """Helper method to plot metric results."""
+        if mean:
+            # Plot with error bars for mean values
+            df_reshaped = np.array(df.columns).reshape(int(len(list(df.columns)) / 2), 2)
+            for tuple_ in df_reshaped:
+                condition = tuple_[0][0]  # Get condition name from MultiIndex
+                mean_col = (condition, 'mean')
+                std_col = (condition, 'std')
+                
+                x = np.array(df.index.to_list()) / 24
+                mean_array = df[mean_col]
+                std_array = df[std_col]
+                
+                if skip_nan:
+                    valid_indices = ~np.isnan(mean_array)
+                    mean_array = mean_array[valid_indices]
+                    std_array = std_array[valid_indices]
+                    x = x[valid_indices]
 
-        Creates interactive widgets for:
-        - Browsing through wells and timepoints
-        - Viewing different imaging channels
-        - Performing manual and automated segmentation
-        - Visualizing analysis results
+                plt.fill_between(x, mean_array - std_array, mean_array + std_array,
+                                alpha=0.5, color='gray')
+                plt.plot(x, mean_array, label=condition)
 
-        Args:
-            plot_anzahl: Number of image panels to display
-        """
-        wells_array = sorted(list(self.spheroid_dict.keys()), key=lambda x: (x[0], int(x[1:])))
-        initial_well = wells_array[0]
-        spheroid_series = self.spheroid_dict[initial_well]
-
-        result_metric_array = ['radius', 'area']
-        self.result_metric = 'radius'
-        self.result_df = self.metric(self.result_metric, mean=False, plot=False)
-        self.result_df_mean = self.metric(self.result_metric, mean=False, plot=False)
-
-        # Methoden für Buttons
-        def manual_segmentation(change):
-            spheroid_series = self.spheroid_dict[well_pulldown.value]
-            spheroid_image = spheroid_series.spheroid_image_dict[self.time_points_array[slider.value]]
-            try:
-                pass
-                # spheroid_image.segmentation_manual('brightfield')
-            except:
-                print('error!')
-                # spheroid_image.segmentation_manual('fluorescence_green')
-
-        def thresholding_segmentation(change):
-            spheroid_series = self.spheroid_dict[well_pulldown.value]
-            spheroid_image = spheroid_series.spheroid_image_dict[self.time_points_array[slider.value]]
-            # redo Segmentation
-            try:
-                spheroid_image.contour, spheroid_image.contour_touches_border = spheroid_image.segmentation_thresholding(
-                    'fluorescence_green', thresholding_input.value)
-                if spheroid_image.contour_touches_border:
-                    try:
-                        border_margin = 5
-                        spheroid_image.contour = add_fitted_contour(spheroid_image.contour,
-                                                                    fit_ellipse(spheroid_image.contour)[-1],
-                                                                    spheroid_image._width - border_margin - 1,
-                                                                    spheroid_image._height - border_margin - 1,
-                                                                    border_margin + 1, border_margin + 1)
-                    except:
-                        pass
-                del self.metric_dfs[self.result_metric]
-                self.result_df = self.metric(self.result_metric, mean=False, plot=False)
-                self.result_df_mean = self.metric(self.result_metric, mean=False, plot=False)
-                # save generated contour
-                with h5py.File(self.hdf5_path, 'a') as hdf_file:
-                    spheroid_image_group = hdf_file[spheroid_image.hdf5_key]
-                    del spheroid_image_group['contour']
-                    spheroid_image_group.create_dataset('contour', data=spheroid_image.contour)
-            except:
-                pass
-            update_display()
-
-        def ai_segmentation(change):
-            spheroid_series = self.spheroid_dict[well_pulldown.value]
-            spheroid_image = spheroid_series.spheroid_image_dict[self.time_points_array[slider.value]]
-            # redo Segmentation
-            try:
-                spheroid_image.contour, spheroid_image.contour_touches_border = spheroid_image.segmentation_detectron(
-                    'brightfield', ai_input.value)
-                if spheroid_image.contour_touches_border and reconstruct_border:
-                    spheroid_image.contour = add_fitted_contour(spheroid_image.contour,
-                                                                fit_ellipse(spheroid_image.contour)[-1],
-                                                                spheroid_image._width - border_margin - 1,
-                                                                spheroid_image._height - border_margin - 1,
-                                                                border_margin + 1, border_margin + 1)
-                self.result_df = self.metric(self.result_metric, mean=False, plot=False)
-                self.result_df_mean = self.metric(self.result_metric, mean=False, plot=False)
-                # save generated contour
-                with h5py.File(self.hdf5_path, 'a') as hdf_file:
-                    spheroid_image_group = hdf_file[spheroid_image.hdf5_key]
-                    del spheroid_image_group['contour']
-                    spheroid_image_group.create_dataset('contour', data=spheroid_image.contour)
-            except:
-                pass
-            update_display()
-
-        def delete_contour(change):
-            spheroid_series = self.spheroid_dict[well_pulldown.value]
-            spheroid_image = spheroid_series.spheroid_image_dict[self.time_points_array[slider.value]]
-            # delete contour
-            spheroid_image.contour = None
-            spheroid_image.contour_touches_border = False
-            # remove contour from hdf5-file
-            with h5py.File(self.hdf5_path, 'a') as hdf_file:
-                spheroid_image_group = hdf_file[spheroid_image.hdf5_key]
-                del spheroid_image_group['contour']
-                spheroid_image_group.create_dataset('contour', data=np.nan)
-
-            # reload relevant metric
-            self.result_df = self.metric(self.result_metric, mean=False, plot=False)
-            self.result_df_mean = self.metric(self.result_metric, mean=False, plot=False)
-            update_display()
-
-        def delete_spheroid_image(change):
-            print("Spheroid image deleted.")
-
-        def handle_key(event):
-            if event.key == 'right':
-                slider.value = min(slider.value + 1, len(relative_times) - 1)
-            elif event.key == 'left':
-                slider.value = max(slider.value - 1, 0)
-
-        ''' Sort Timepoints '''
-        list(spheroid_series.spheroid_image_dict.keys()).sort(key=lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
-        relative_times = []
-        start_time = datetime.strptime(self.time_points_array[0], '%Y-%m-%d %H:%M:%S')
-        for time_str in self.time_points_array:
-            current_time = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
-            time_diff = current_time - start_time
-            days = time_diff.days
-            hours = time_diff.seconds // 3600
-            relative_times.append(f"{days}d {hours}h")
-
-        ''' Layout '''
-        slider = widgets.IntSlider(value=0, min=0, max=len(relative_times) - 1,
-                                   step=1,
-                                   description='Time',
-                                   layout=widgets.Layout(width='70%'))
-        label = widgets.Label(value=relative_times[slider.value])
-        well_pulldown = widgets.Dropdown(
-            options=wells_array,
-            description='Well',
-            layout=widgets.Layout(width='150px')
-        )
-
-        outputs = []
-        kanal_checkboxes = []
-        dropdowns = []
-
-        for i in range(plot_anzahl + 1):
-            output = widgets.Output(layout=widgets.Layout(width='95%', height='300px'))
-            outputs.append(output)
-            if i in range(plot_anzahl):
-                dropdown = widgets.Dropdown(
-                    options=['brightfield', 'fluorescence_green', 'fluorescence_red', 'fluorescence_blue'],
-                    description='Channel',
-                    layout=widgets.Layout(width='70%')
-                )
+            plt.xlabel('Time [d]')
+            if name in self.plot_name_dict:
+                plt.ylabel(rf'{self.plot_name_dict[name]}')
             else:
-                dropdown = widgets.Dropdown(
-                    options=result_metric_array,
-                    description='Metric',
-                    layout=widgets.Layout(width='70%')
-                )
-            dropdown.observe(lambda change: update_display(), names='value')
-            dropdowns.append(dropdown)
-
-        def update_display():
-            spheroid_series = self.spheroid_dict[well_pulldown.value]
-            spheroid_image = spheroid_series.spheroid_image_dict[self.time_points_array[slider.value]]
-            for i in range(plot_anzahl + 1):
-                with outputs[i]:
-                    outputs[i].clear_output(wait=True)
-                    fig, ax = plt.subplots(figsize=(4, 3))
-                    for spine in ax.spines.values():
-                        spine.set_edgecolor('black')
-                        spine.set_linewidth(.5)
-
-                    if i in range(plot_anzahl):
-                        if dropdowns[i].value in spheroid_image.image_path_dict:
-                            ax.imshow(cv2.cvtColor(cv2.imread(spheroid_image.image_path_dict[dropdowns[i].value]),
-                                                   cv2.COLOR_BGR2RGB),
-                                      extent=[0, spheroid_image.image_size[0], 0, spheroid_image.image_size[1]])
-                            size_bar = AnchoredSizeBar(ax.transData, 300, '300 µm', 'lower right', pad=0, color='white',
-                                                       frameon=False, size_vertical=10, borderpad=0.5)
-                            ax.add_artist(size_bar)
-                        else:
-                            ax.text(800, 600, 'No Image', fontsize=15, ha='center', va='center', color='gray',
-                                    alpha=0.7)
-
-                        if show_contour_checkbox.value and spheroid_image.contour is not None:
-                            ax.plot(spheroid_image.scaled_contour[:, 0],
-                                    spheroid_image.scaled_contour[:, 1],
-                                    color='b')
-                        label.value = relative_times[slider.value]
-                        ax.axis('off')
-                        ax.set_aspect('equal', adjustable='box')
-                        plt.xlim(0, spheroid_image.image_size[0])
-                        plt.ylim(0, spheroid_image.image_size[1])
-                        plt.show()
-                    else:
-                        if prolif_plot_checkbox.value:
-                            if dropdowns[i].value is not self.result_metric:
-                                self.result_metric = dropdowns[i].value
-                                self.result_df = self.metric(self.result_metric, mean=False, plot=False)
-                                self.result_df_mean = self.metric(self.result_metric, mean=False, plot=False)
-
-                            # time_points = list(range(len(relative_times)))
-                            # proliferation_data = [i * 2 for i in time_points]
-                            # ax.plot(time_points, proliferation_data, label="Proliferation")
-                            index = well_pulldown.value
-                            if self.result_metric == 'radius':
-                                y_value = spheroid_image.radius
-                            if self.result_metric == 'area':
-                                y_value = spheroid_image.area
-                            ax.plot(np.array(self.result_df.index.to_list()) / 24, self.result_df[index],
-                                    label=f"{index}")
-                            if spheroid_image.contour is not None:
-                                plt.plot(self.relative_time_array[slider.value] / 24, y_value, 'ro',
-                                         markersize=5)  # 'ro' steht für roten Punkt
-                            ax.set_xlabel("Time [d]")
-                            ax.set_ylabel(self.result_metric)
-                            ax.legend()
-                            ax.grid(True)
-                            plt.show()
-                        else:
-                            # Alles unsichtbar machen
-                            ax.axis('off')  # Achsen ausschalten
-                            fig.patch.set_visible(False)  # Hintergrund des Plots unsichtbar machen
-
-                            plt.show()
-
-        slider.observe(lambda change: update_display(), names='value')
-        well_pulldown.observe(lambda change: update_display(), names='value')
-
-        for i in range(plot_anzahl):
-            dropdowns[i].observe(lambda change, i=i: update_display(), names='value')
-
-        control_boxes = []
-        for i in range(plot_anzahl + 1):
-            control_box = widgets.VBox([dropdowns[i]],
-                                       layout=widgets.Layout(margin='80px 0 0 0'))
-            control_boxes.append(widgets.VBox([outputs[i], control_box]))
-
-        plot_box = widgets.HBox(control_boxes,
-                                layout=widgets.Layout(justify_content='center', width='100%', margin='0 0 0px 0'))
-
-        slider_hbox = widgets.HBox([well_pulldown, slider, label], layout=widgets.Layout(align_items='center'))
-
-        show_contour_checkbox = widgets.Checkbox(value=False, description="Contour",
-                                                 layout=widgets.Layout(width="auto"))
-        show_contour_checkbox.observe(lambda change: update_display(), names='value')
-        segmentation_options_checkbox = widgets.Checkbox(value=False, description="Display Segmentation Options",
-                                                         layout=widgets.Layout(width="auto"))
-        prolif_plot_checkbox = widgets.Checkbox(value=True, description="Show Proliferation Plot",
-                                                layout=widgets.Layout(width="auto"))
-        delete_spheroid_button = widgets.Button(description="Delete SpheroidImage", on_click=delete_spheroid_image,
-                                                layout=widgets.Layout(margin='0 50px 0 200px', width='200px'))
-        delete_spheroid_button.style.button_color = 'red'
-
-        tickbox_and_delete_button = widgets.HBox(
-            [segmentation_options_checkbox, show_contour_checkbox, prolif_plot_checkbox, delete_spheroid_button],
-            layout=widgets.Layout(margin='0 0px 0 0'))
-
-        header = widgets.Label(value="Segmentation Options:",
-                               layout=widgets.Layout(font_weight="bold", font_size="16px", margin='5px 0'))
-        manual_button = widgets.Button(description="Manual", layout=widgets.Layout(margin='0 10px'))
-        thresholding_button = widgets.Button(description="Thresholding", layout=widgets.Layout(margin='0 10px'))
-        thresholding_input = widgets.FloatText(value=1.0, layout=widgets.Layout(width='80px'))
-        thresholding_input.step = 0.1
-        ai_button = widgets.Button(description="AI", layout=widgets.Layout(margin='0 10px'))
-        ai_input = widgets.FloatText(value=0.7, layout=widgets.Layout(width='80px'))
-        ai_input.step = 0.05
-        delete_contour_button = widgets.Button(description="Delete Contour", layout=widgets.Layout(margin='0 10px'))
-        delete_contour_button.style.button_color = 'coral'
-
-        manual_button.on_click(manual_segmentation)
-        thresholding_button.on_click(thresholding_segmentation)
-        ai_button.on_click(ai_segmentation)
-        delete_contour_button.on_click(delete_contour)
-
-        segmentation_buttons = widgets.HBox([
-            header,
-            manual_button,
-            widgets.HBox([thresholding_button, thresholding_input]),
-            widgets.HBox([ai_button, ai_input]),
-            delete_contour_button
-        ], layout=widgets.Layout(justify_content='center', margin='0px 0'))
-
-        def toggle_segmentation_buttons(change):
-            if change.new:
-                segmentation_buttons_box.children = [tickbox_and_delete_button, segmentation_buttons]
-            else:
-                segmentation_buttons_box.children = [tickbox_and_delete_button]
-
-        segmentation_options_checkbox.observe(toggle_segmentation_buttons, names='value')
-        segmentation_buttons_box = widgets.VBox([tickbox_and_delete_button], layout=widgets.Layout(margin='5px 0 0 0'))
-
-        prolif_plot_checkbox.observe(lambda change: update_display(), names='value')
-
-        complete_display = widgets.VBox([
-            slider_hbox,
-            plot_box,
-            segmentation_buttons_box
-        ], layout=widgets.Layout(margin='0 0 0px 0'))
-
-        display(complete_display)
-        update_display()
-
-    def __results_mean(self, dict_key: str) -> pd.DataFrame:
-        df_results = self.results_df_dict[dict_key]
-        for key in list(self.platemap.replicates.keys()):
-            condition = ', '.join([f"{item[0]}: {item[1]}" for item in key])
-            wells_list = self.platemap.replicates[key]
-            valid_wells = [key for key in wells_list if key in df_results.columns]
-            try:
-                results_mean_df[(condition, 'mean')] = df_results[valid_wells].mean(axis=1, skipna=True)
-                results_mean_df[(condition, 'std')] = df_results[valid_wells].std(axis=1, skipna=True)
-            except:
-                results_mean_df = pd.DataFrame({
-                    (condition, 'mean'): df_results[valid_wells].mean(axis=1, skipna=True),
-                    (condition, 'std'): df_results[valid_wells].std(axis=1, skipna=True)
-                })
-        return results_mean_df
-
+                plt.ylabel('Value')
+            plt.legend(fontsize=6)
+        else:
+            # Plot individual well data
+            for index in list(df.columns):
+                if skip_nan:
+                    valid_indices = ~np.isnan(df[index])
+                    x = (np.array(df.index.to_list()) / 24)[valid_indices]
+                    y = (df[index])[valid_indices]
+                else:
+                    x = (np.array(df.index.to_list()) / 24)
+                    y = (df[index])
+                plt.plot(x, y, label=f"{index}")
+            
+            plt.xlabel('Time [d]')
+            if name in self.plot_name_dict:
+                plt.ylabel(rf'{self.plot_name_dict[name]}')
+            plt.legend()
+        
+        plt.show()
     # todo
     def _worksheet(self, workbook: Workbook) -> Workbook:
         pass
 
     def save_time_periods_to_hdf5(self):
         """Save time periods to HDF5 file for all collections."""
-        for collection in self.replicates.values():
+        for collection in self.replicates().values():
             collection.save_time_periods_to_hdf5()
 
     def load_time_periods_from_hdf5(self):
         """Load time periods from HDF5 file for all collections."""
-        for collection in self.replicates.values():
+        for collection in self.replicates().values():
             collection.load_time_periods_from_hdf5()
 
     def time_period(self, name: str,
@@ -1182,7 +752,7 @@ class Result(Base):
                     end_time: str | datetime | None = None,
                     description: str | None = None):
         """Smart method to set or update time period for all collections."""
-        for collection in self.replicates.values():
+        for collection in self.replicates().values():
             collection.time_period(
                 name=name,
                 start_time=start_time,
@@ -1196,7 +766,7 @@ class Result(Base):
                         end_time: str | datetime | None = None,
                         description: str | None = None):
         """Set time period for all spheroid collections."""
-        for collection in self.replicates.values():
+        for collection in self.replicates().values():
             collection.set_time_period(
                 name=name,
                 start_time=start_time,
@@ -1210,7 +780,7 @@ class Result(Base):
                            end_time: str | datetime | None = None,
                            description: str | None = None):
         """Update time period for all spheroid collections."""
-        for collection in self.replicates.values():
+        for collection in self.replicates().values():
             collection.update_time_period(
                 name=name,
                 start_time=start_time,
@@ -1221,6 +791,79 @@ class Result(Base):
 
     def remove_time_period(self, name: str):
         """Remove time period from all spheroid collections."""
-        for collection in self.replicates.values():
+        for collection in self.replicates().values():
             collection.remove_time_period(name)
         self.save_time_periods_to_hdf5()
+
+    def condition_slice(self, element_name: str, timepoint: float, 
+                        metric: str = 'radius', plot: bool = True) -> pd.DataFrame:
+        """Analyze metric values across conditions at a specific timepoint.
+        
+        Args:
+            element_name: Name of cell line or compound to analyze
+            timepoint: Relative timepoint in hours to analyze
+            metric: Metric to analyze ('radius', 'area', 'fluorescence_*')
+            plot: Whether to display a bar plot of results
+            
+        Returns:
+            DataFrame with mean and std values for each condition
+        """
+        # Get metrics for the element's replicates
+        df = self.metric(
+            name=metric,
+            mean=True,
+            element_name=element_name,
+            plot=False
+        )
+        
+        # Find closest available timepoint
+        available_times = df.index.values
+        closest_time = available_times[np.abs(available_times - timepoint).argmin()]
+        
+        # Extract values at that timepoint
+        slice_df = df.loc[closest_time]
+        
+        # Reshape into more readable format
+        conditions = []
+        means = []
+        stds = []
+        
+        for col in df.columns:
+            if col[1] == 'mean':  # Only process mean columns
+                condition = col[0]  # Get condition name from MultiIndex
+                if isinstance(condition, tuple):
+                    condition_value = condition[1]  # Get the value (e.g. concentration)
+                else:
+                    condition_value = str(condition)  # Use condition as is if not a tuple
+                
+                means.append(slice_df[col])
+                stds.append(slice_df[(condition, 'std')])
+                conditions.append(condition_value)
+        
+        result_df = pd.DataFrame({
+            'condition': conditions,
+            'mean': means,
+            'std': stds
+        })
+        result_df = result_df.sort_values('condition')
+        
+        if plot:
+            plt.figure(figsize=(8, 5))
+            plt.bar(
+                range(len(conditions)), 
+                result_df['mean'],
+                yerr=result_df['std'],
+                capsize=5,
+                alpha=0.7
+            )
+            plt.xticks(range(len(conditions)), result_df['condition'], rotation=45)
+            plt.xlabel(element_name)
+            if metric in self.plot_name_dict:
+                plt.ylabel(rf'{self.plot_name_dict[metric]}')
+            else:
+                plt.ylabel(metric)
+            plt.title(f'{metric} at {closest_time:.1f}h')
+            plt.tight_layout()
+            plt.show()
+            
+        return result_df

@@ -3,7 +3,7 @@ name: Publish to PyPI
 on:
   push:  # Workflow wird bei jedem Push ausgelöst
     branches:
-      - master  # Passe den Branch-Namen an, falls du einen anderen verwendest
+      - masterXX  # Passe den Branch-Namen an, falls du einen anderen verwendest
 
 jobs:
   publish:

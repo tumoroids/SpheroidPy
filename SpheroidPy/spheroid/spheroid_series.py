@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 from matplotlib.colors import Normalize
 import h5py
+import pandas as pd
 
 from SpheroidPy.spheroid.spheroid_image import SpheroidImage
 from SpheroidPy.spheroid.time_period import TimePeriod
@@ -378,6 +379,118 @@ class SpheroidSeries:
             video.release()
         else:
             print("Kein Video erstellt. Möglicherweise wurden keine Bilder geladen.")
+
+    def plot_radii(self):
+        i=0
+        time = []
+        radius, out, inh, nec = [], [], [], []
+        for spheroid_image in self.spheroid_image_dict.values():
+            try:
+                radii_dict = spheroid_image.analysis_results['functional_radii']
+            except:
+                radii_dict = {'outer': None, 'inhibited': None, 'necrotic': None}
+            radius.append(spheroid_image.radius)
+            out.append(radii_dict['outer'])
+            inh.append(radii_dict['inhibited'])
+            nec.append(radii_dict['necrotic'])
+            time.append(self.relative_timepoints[i]/24)
+            i=i+1
+        plt.plot(time, radius, label='radius', color='grey')
+        plt.plot(time, out, label='outer', color='darkgreen')
+        plt.plot(time, inh, label='inhibited', color='green')
+        plt.plot(time, nec, label='necrotic', color='red')
+        plt.title(self.name)
+        plt.show()
+
+    @property
+    def relative_timepoints(self) -> list:
+        """Get timepoints relative to the first timepoint."""
+        timepoints = sorted(self.spheroid_image_dict.keys())
+        return [(datetime.strptime(timepoint, '%Y-%m-%d %H:%M:%S') - datetime.strptime(timepoints[0], '%Y-%m-%d %H:%M:%S')).total_seconds() / 3600
+                for timepoint in timepoints]
+
+    def calculate_metric(self, name: str = 'radius', interpolate: bool = True, 
+                         ignore_border: bool = True, plot: bool = False) -> pd.DataFrame:
+        """Calculate specified metric across timepoints.
+        
+        Args:
+            name: Metric to calculate ('radius', 'area', 'fluorescence_*')
+            interpolate: Whether to interpolate missing timepoints
+            ignore_border: Whether to exclude spheroids touching image border
+            plot: Whether to display a plot of the metric over time
+            
+        Returns:
+            DataFrame with timepoints as index and metric values as data
+        """
+        # Initialize DataFrame with timepoints
+        timepoints = sorted(self.spheroid_image_dict.keys())
+        relative_times = self.relative_timepoints
+        # Use well ID directly without "Spheroid-" prefix
+        well_id = self.name.replace('Spheroid-', '')
+        result_df = pd.DataFrame(float(np.nan), index=relative_times, columns=[well_id])
+        
+        # Split metric name for fluorescence
+        name_split_array = name.split('_')
+        if name_split_array[0] == 'fluorescence':
+            result_df_cumulative = result_df.copy()
+            result_df_mean = result_df.copy()
+        
+        # Calculate metric for each timepoint
+        for timepoint, rel_time in zip(timepoints, relative_times):
+            spheroid_image = self.spheroid_image_dict[timepoint]
+            
+            if name == 'radius':
+                result_df.loc[rel_time, well_id] = spheroid_image.radius
+            elif name == 'area':
+                result_df.loc[rel_time, well_id] = spheroid_image.area
+            elif name_split_array[0] == 'fluorescence':
+                color = name_split_array[1]
+                try:
+                    metric_fluorescence_tuple = spheroid_image.metric_fluorescence(color, ignore_border)
+                    result_df_cumulative.loc[rel_time, well_id] = metric_fluorescence_tuple[0]
+                    result_df_mean.loc[rel_time, well_id] = metric_fluorescence_tuple[1]
+                except:
+                    result_df_cumulative.loc[rel_time, well_id] = None
+                    result_df_mean.loc[rel_time, well_id] = None
+        
+        # Handle fluorescence metrics
+        if name_split_array[0] == 'fluorescence':
+            if name_split_array[2] == 'mean':
+                result_df = result_df_mean
+            elif name_split_array[2] == 'cumulative':
+                result_df = result_df_cumulative
+        
+        # Interpolate if requested
+        if interpolate:
+            result_df = result_df.interpolate(method='linear', axis=0, limit_direction='both')
+            
+        # Plot if requested
+        if plot:
+            plt.figure(figsize=(8, 5))
+            x = np.array(result_df.index) / 24  # Convert to days
+            y = result_df[well_id]
+            
+            # Skip NaN values in plot
+            valid_mask = ~np.isnan(y)
+            x = x[valid_mask]
+            y = y[valid_mask]
+            
+            plt.plot(x, y, label=well_id, marker='o')
+            plt.xlabel('Time [d]')
+            
+            # Use plot_name_dict from Result if available
+            if self._result and name in self._result.plot_name_dict:
+                plt.ylabel(rf'{self._result.plot_name_dict[name]}')
+            else:
+                plt.ylabel(name)
+                
+            plt.title(f'{name} over time')
+            plt.grid(True, alpha=0.3)
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
+            
+        return result_df
 
     def __repr__(self):
         return self.name + (f'\n> Number of Timepoints: {len(self.spheroid_image_dict.keys())}'

@@ -26,8 +26,8 @@ def find_inflection_point(y_array, x_array=None, sigma=None):
     # Calculate the first derivative
     dy_dx_array = np.gradient(y_array, x_array)
 
-    plt.plot(x_array,np.abs(dy_dx_array))
-    plt.show()
+    #plt.plot(x_array,np.abs(dy_dx_array))
+    #plt.show()
 
     # Global maximum
     max_index = np.argmax(y_array)

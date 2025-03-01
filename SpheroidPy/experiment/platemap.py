@@ -154,10 +154,17 @@ class Platemap:
             for compound in name:
                 self.compound(compound)
 
-    @property
-    def replicates(self) -> dict:
-        merged_dict = {k: v for d in (self.cell_lines, self.compounds) for k, v in d.items()}
-        return find_replicates(merged_dict)
+    def replicates(self, element_name: str | None = None) -> dict:
+        """Get replicate groups for cell lines and/or compounds.
+        
+        Args:
+            element_name: Optional name of cell line or compound to filter by.
+                        If None, returns replicates for all elements.
+                        
+        Returns:
+            Dictionary mapping conditions to lists of well positions
+        """
+        return self.find_replicates(element_name)
 
     def heatmap(self, element: str, color_map: str | None = None, ax: plt.Axes | None = None):
         """Generate a heatmap visualization of the platemap data."""
@@ -242,6 +249,50 @@ class Platemap:
     @property
     def hdf5_path(self) -> str:
         return self.result.hdf5_path
+
+    def find_replicates(self, element_name: str | None = None) -> dict:
+        """Find replicate groups based on element values.
+        
+        Args:
+            element_name: Optional name of cell line or compound to filter by.
+                        If None, returns replicates for all elements.
+                        
+        Returns:
+            Dictionary mapping unique conditions to lists of well positions
+        """
+        if element_name is None:
+            # Original behavior - combine all elements
+            merged_dict = {k: v for d in (self.cell_lines, self.compounds) for k, v in d.items()}
+        else:
+            # Filter by specific element
+            if element_name in self.cell_lines:
+                merged_dict = {element_name: self.cell_lines[element_name]}
+            elif element_name in self.compounds:
+                merged_dict = {element_name: self.compounds[element_name]}
+            else:
+                raise ValueError(f"Element '{element_name}' not found in cell lines or compounds")
+        
+        # Find unique values and their well positions
+        replicates = {}
+        for name, df in merged_dict.items():
+            for value in df.values.flatten():
+                if pd.isna(value) or value == '':
+                    continue
+                    
+                # Find wells with this value
+                wells = []
+                for row in df.index:
+                    for col in df.columns:
+                        if df.loc[row, col] == value:
+                            wells.append(f"{row}{col}")
+                            
+                if wells:
+                    key = ((name, value),)
+                    if key not in replicates:
+                        replicates[key] = []
+                    replicates[key].extend(wells)
+        
+        return replicates
 
     @property
     def col(self):

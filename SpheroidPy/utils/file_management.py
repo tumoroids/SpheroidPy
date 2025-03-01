@@ -155,7 +155,9 @@ def collect_data(base_dir: str, filter_strs = None) -> tuple:
 
         for file_name in files:
             if matches_filter(file_name, filter_strs):
+                #print(f"Including file: {file_name}")
                 index, timestamp = parse_filename_or_dirname(file_name)
+                #print(index, timestamp)
                 if index and timestamp:
                     if index not in data:
                         data[index] = {}

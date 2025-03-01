@@ -2,14 +2,21 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from dataclasses import dataclass
 from datetime import datetime
+
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import h5py
+import multiprocessing
+from multiprocessing import Pool
+from scipy.optimize import curve_fit
 
 from SpheroidPy.experiment.base import Base
 from SpheroidPy.spheroid.spheroid_collection import SpheroidCollection
 from SpheroidPy.experiment.result import Result
+
+from SpheroidPy.spheroid.models.greenspan import GreenspanModel, ModelParameters
 
 if TYPE_CHECKING:
     from SpheroidPy.experiment.experiment import Experiment
@@ -56,21 +63,17 @@ class Analysis(Base):
                     └── metadata
         """
 
-        print(type(spheroids), isinstance(spheroids, SpheroidCollection))
-        print(id(spheroids.__class__))  # ID der Klasse des Objekts
-        print(id(SpheroidCollection))  # ID der importierten Klasse
-
         if isinstance(spheroids, Result):
             for condition_name, spheroid_collection in spheroids.replicates.items():
                 self.add_replicate(spheroid_collection, condition_name)
-        #elif not isinstance(spheroids, SpheroidCollection):
-        #    raise Exception("Replicate must be a SpheroidCollection or Result object")
+        elif not isinstance(spheroids, SpheroidCollection):
+            raise Exception("Replicate must be a SpheroidCollection or Result object")
 
         if name is None:
             name = spheroids.name
 
         # add spheroids to dict
-        print(spheroids.result.name)
+        print(f"SpheroidCollection '{spheroids.name}' added under Result '{spheroids.result.name}'")
         if spheroids.result.name not in self.replicates_dict:
             self.replicates_dict[spheroids.result.name] = {}
         self.replicates_dict[spheroids.result.name][name] = spheroids
@@ -133,7 +136,7 @@ class Analysis(Base):
                                 spheroid_ref.attrs[timepoint] = image.hdf5_key
             '''
 
-    def get_spheroids(self, time_period: str | None = None, combine_replicates: bool = False) -> list[SpheroidCollection]:
+    def get_spheroids(self, time_period: str | None = None) -> dict[str, dict[str, list[SpheroidSeries]]]:
         """Get all spheroids from replicates.
 
         Args:
@@ -143,69 +146,242 @@ class Analysis(Base):
         Returns:
             List of SpheroidCollection objects
         """
-        spheroids = []
+        spheroids_dict = {}
 
-        for condition, collections in self.replicates_dict.items():
-            for collection in collections:
-                spheroids.extend(collection.get_spheroids(time_period))
+        for result_name, spheroid_collections in self.replicates_dict.items():
+            spheroids_dict[result_name] = {}
+            for name, collection in spheroid_collections.items(): #todo: später vlt als dict sinvoller für vers initial conditions
+                if name not in spheroids_dict[result_name]:
+                    spheroids_dict[result_name][name] = []
+                spheroids_dict[result_name][name].extend(collection.get_spheroids(time_period))
 
-        return spheroids
+        return spheroids_dict
 
-    def analyze_functional_radii(self, live_channel: str | None = None,
-                               death_channel: str | None = None) -> pd.DataFrame:
+    def analyze_functional_radii_alt_(self, live_channel: str | None = 'green',
+                                 death_channel: str | None = 'red',
+                                 time_peroid: str | None = None) -> dict[str,list]:
         """Analyze functional radii across all replicates.
         
         Computes outer, inhibited and necrotic radii for all spheroids
         in each replicate group.
         
         Args:
-            live_channel: Override default live cell fluorescence channel
-            death_channel: Override default dead cell fluorescence channel
+            live_channel: live cell fluorescence channel ('green' by default)
+            death_channel: dead cell fluorescence channel ('red' by default)
+            time_peroid: Optional time period to consider for analysis
             
         Returns:
             DataFrame containing functional radii measurements for all conditions
         """
-        live_ch = live_channel or self.config["live_channel"]
-        death_ch = death_channel or self.config["death_channel"]
 
-        results_data = []
+        spheroids_dict = self.get_spheroids(time_period=time_peroid)
+        # empty dict to later store results, filled with Nones
+        results_dict = {key: {k: {} for k in value} if isinstance(value, dict) else None for key, value in spheroids_dict.items()}
 
-        # Iterate through conditions
-        for condition, replicate_collections in tqdm(self.replicates_dict.items(), 
-                                                   desc="Analyzing conditions"):
-            if condition == 'results':
-                continue
-                
-            # Process each replicate collection
-            for collection in replicate_collections:
-                # Only process active spheroids
-                for spheroid_series in collection.get_active_spheroids():
-                    for timepoint, spheroid_image in spheroid_series.spheroid_image_dict.items():
+        # Iterate through dictionarys
+        for result_name, conditions in tqdm(spheroids_dict.items(), desc="Analyzing conditions"):
+            for condition, spheroid_list in conditions.items():
+                for spheroid_series in spheroid_list:
+                    time = []
+                    i=0
+                    radius, out, inh, nec = [], [], [], []
+                    for timepoint, spheroid_image in list(spheroid_series.spheroid_image_dict.items()):
                         try:
+                            if spheroid_series.name not in results_dict[result_name][condition]:
+                                results_dict[result_name][condition][spheroid_series.name] = {}
+
                             # Calculate functional radii
                             radii = spheroid_image.functional_radius(
-                                live_color=live_ch,
-                                death_color=death_ch
+                                live_color=live_channel,
+                                death_color=death_channel
                             )
-                            
+
+                            spheroid_image.analysis_results['functional_radii'] = radii
+
+                            results_dict[result_name][condition][spheroid_series.name][timepoint] = radii
+
                             # Store results
-                            results_data.append({
-                                'condition': condition,
-                                'timepoint': datetime.strptime(timepoint, '%Y-%m-%d %H:%M:%S'),
+                            result_radii = {
                                 'outer_radius': radii['outer'],
                                 'inhibited_radius': radii['inhibited'],
                                 'necrotic_radius': radii['necrotic']
-                            })
+                            }
+                            time.append(i/24)
+                            radius.append(spheroid_image.radius)
+                            out.append(radii['outer'])
+                            inh.append(radii['inhibited'])
+                            nec.append(radii['necrotic'])
+                            i=i+2
+
                         except Exception as e:
                             print(f"Error processing {condition} at {timepoint}: {e}")
+                            time.append(i / 24)
+                            radius.append(spheroid_image.radius)
+                            out.append(None)
+                            inh.append(None)
+                            nec.append(None)
+                            i = i + 2
+                    plt.plot(time, radius, label='radius', color='grey')
+                    plt.plot(time, out, label='outer', color='darkgreen')
+                    plt.plot(time, inh, label='inhibited', color='green')
+                    plt.plot(time, nec, label='necrotic', color='red')
+                    plt.title(spheroid_series.name)
+                    plt.show()
 
-        # Convert to DataFrame
-        df = pd.DataFrame(results_data)
-        
-        # Store results
-        self.analysis_results['functional_radii'] = df
-        
-        return df
+        return results_dict
+
+    def analyze_functional_radii(self, live_channel: str | None = 'green',
+                                 death_channel: str | None = 'red',
+                                 time_peroid: str | None = None) -> dict[str, dict]:
+        """Analyze functional radii across all replicates, parallelized with multiprocessing.
+
+        Computes outer, inhibited, and necrotic radii for all spheroids
+        in each replicate group.
+
+        Args:
+            live_channel: live cell fluorescence channel ('green' by default)
+            death_channel: dead cell fluorescence channel ('red' by default)
+            time_peroid: Optional time period to consider for analysis
+
+        Returns:
+            Dictionary containing functional radii measurements for all conditions
+        """
+        spheroids_dict = self.get_spheroids(time_period=time_peroid)
+        results_dict = {key: {k: {} for k in value} if isinstance(value, dict) else None for key, value in spheroids_dict.items()}
+
+        print(spheroids_dict)
+        print(results_dict)
+
+        # Prepare arguments for multiprocessing
+        tasks = []
+        for result_name, conditions in spheroids_dict.items():
+            for condition, spheroid_list in conditions.items():
+                for spheroid_series in spheroid_list:
+                    # Serialize spheroid series data
+                    spheroid_series_data = {
+                        'name': spheroid_series.name,
+                        'images': {timepoint: {
+                        'functional_radius': spheroid_image.functional_radius
+                        } for timepoint, spheroid_image in spheroid_series.spheroid_image_dict.items()}
+                    }
+                    tasks.append((result_name, condition, spheroid_series_data, live_channel, death_channel))
+
+        with Pool(processes=multiprocessing.cpu_count()) as pool:
+            results = []
+            for res in tqdm(pool.imap_unordered(process_spheroid, tasks), total=len(tasks), desc="Processing Spheroids"):
+                results.append(res)
+
+        # Merge results back into the main dictionary
+        for result_name, condition, spheroid_name, local_results in results:
+            if result_name in results_dict and condition in results_dict[result_name]:
+                results_dict[result_name][condition][spheroid_name] = local_results
+
+        return results_dict
+
+    def plot_radii(self, time_peroid: str | None = None):
+        spheroids_dict = self.get_spheroids(time_period=time_peroid)
+        for result_name, conditions in spheroids_dict.items():
+            for condition, spheroid_list in conditions.items():
+                for spheroid_series in spheroid_list:
+                    spheroid_series.plot_radii()
+
+    def mean_radii(self, time_peroid: str | None = None, plot: bool = True):
+        spheroids_dict = self.get_spheroids(time_period=time_peroid)
+        radii_dict = {}
+        list_dict = {}
+        for result_name, conditions in spheroids_dict.items():
+            radii_dict[result_name] = {'outer': {}, 'necrotic': {}}
+            for condition, spheroid_list in conditions.items():
+                outer_radii_by_time = {}
+                necrotic_radii_by_time = {}
+
+                for spheroid_series in spheroid_list:
+                    for timepoint, spheroid_image in spheroid_series.spheroid_image_dict.items():
+                        try:
+                            radii_data = spheroid_image.analysis_results['functional_radii']
+                        except:
+                            radii_data = {'outer': None, 'inhibited': None, 'necrotic': None}
+
+                        # Append radii to the corresponding timepoint
+                        if timepoint not in outer_radii_by_time:
+                            outer_radii_by_time[timepoint] = []
+                        if timepoint not in necrotic_radii_by_time:
+                            necrotic_radii_by_time[timepoint] = []
+
+                        if radii_data['outer'] is not None:
+                            outer_radii_by_time[timepoint].append(radii_data['outer'])
+                        if radii_data['necrotic'] is not None:
+                            necrotic_radii_by_time[timepoint].append(radii_data['necrotic'])
+
+                # Calculate mean and std for each timepoint
+                outer_radius_mean = {t: np.mean(vals) for t, vals in outer_radii_by_time.items()}
+                outer_radius_std = {t: np.std(vals) for t, vals in outer_radii_by_time.items()}
+                necrotic_radius_mean = {t: np.mean(vals) for t, vals in necrotic_radii_by_time.items()}
+                necrotic_radius_std = {t: np.std(vals) for t, vals in necrotic_radii_by_time.items()}
+
+                # Store results
+                radii_dict[result_name]['outer'][condition] = {'mean': outer_radius_mean, 'std': outer_radius_std}
+                radii_dict[result_name]['necrotic'][condition] = {'mean': necrotic_radius_mean,
+                                                                  'std': necrotic_radius_std}
+
+            # Optional plotting
+            timepoint = [(datetime.strptime(timepoint, '%Y-%m-%d %H:%M:%S') - datetime.strptime(list(radii_dict[result_name]['outer'][condition]['mean'].keys())[0], '%Y-%m-%d %H:%M:%S')).total_seconds() / 86400 for timepoint in radii_dict[result_name]['outer'][condition]['mean'].keys()]
+            outer_radius_mean = [radius for radius in radii_dict[result_name]['outer'][condition]['mean'].values()]
+            outer_radius_std = [radius for radius in radii_dict[result_name]['outer'][condition]['std'].values()]
+            necrotic_radius_mean = [radius for radius in radii_dict[result_name]['necrotic'][condition]['mean'].values()]
+            necrotic_radius_std = [radius for radius in radii_dict[result_name]['necrotic'][condition]['std'].values()]
+            if plot:
+                for mean, std, color, label in zip([outer_radius_mean, necrotic_radius_mean],
+                                                   [outer_radius_std, necrotic_radius_std], ['green', 'red'],
+                                                   ['outer', 'necrotic']):
+                    plt.plot(timepoint, mean, label=label, color=color)
+                    plt.fill_between(timepoint, np.array(mean) - np.array(std), np.array(mean) + np.array(std), alpha=0.2, color=color)
+                plt.legend()
+                plt.title('Hep3B (800 cells)')
+                plt.xlabel('time [d]')
+                plt.ylabel('effective radius [µm]')
+                plt.show()
+            list_dict[result_name] = {'time': timepoint, 'outer_mean': outer_radius_mean, 'outer_std': outer_radius_std, 'necrotic_mean': necrotic_radius_mean, 'necrotic_std': necrotic_radius_std}
+
+        return list_dict
+
+    def fit_greenspan(self, time_peroid: str | None = None):
+        results_tuple = list(self.mean_radii(time_peroid=time_peroid, plot=False).values())
+        results_tuple = [results_tuple[0]]
+        timepoints_meshgrid = 24*np.concatenate([np.array(result['time']) for result in results_tuple])
+        outer_radius_mean_meshgrid = np.concatenate([np.array(result['outer_mean']) for result in results_tuple])
+        outer_radius_std_meshgrid = np.concatenate([np.array(result['outer_std']) for result in results_tuple])
+        necrotic_radius_mean_meshgrid = np.concatenate([np.array(result['necrotic_mean']) for result in results_tuple])
+        necrotic_radius_std_meshgrid = np.concatenate([np.array(result['necrotic_std']) for result in results_tuple])
+
+        greenspan_model = GreenspanModel(R0=outer_radius_mean_meshgrid[0],R1=220)
+        print(greenspan_model.params.values_as_list())
+
+        valid_indices = ~np.isnan(outer_radius_std_meshgrid) & ~np.isinf(outer_radius_std_meshgrid) & \
+                        ~np.isnan(necrotic_radius_std_meshgrid) & ~np.isinf(necrotic_radius_std_meshgrid)
+
+        # Fitting
+        fit_data_mean = np.concatenate([necrotic_radius_mean_meshgrid[valid_indices], outer_radius_mean_meshgrid[valid_indices]])
+        fit_data_std = np.concatenate([necrotic_radius_std_meshgrid[valid_indices], outer_radius_std_meshgrid[valid_indices]])
+        timepoints = timepoints_meshgrid[valid_indices]
+
+        print(fit_data_mean.shape, fit_data_std.shape, timepoints.shape, valid_indices.shape)
+
+        lower_bounds=[0, 0, 0, 150, outer_radius_mean_meshgrid[0]-10,
+                      0, 0, 0, 0,
+                      0, 0]
+        upper_bounds=[1, 20, 2, 500, outer_radius_mean_meshgrid[0]+10,
+                      500, 5000, 500, 100000000,
+                      10000, 10000]
+        params, covariance = curve_fit(greenspan_model, timepoints, fit_data_mean,
+                                       p0=greenspan_model.params.values_as_list(), bounds=[lower_bounds,upper_bounds],
+                                       maxfev=1000000)
+        print(params, covariance)
+        greenspan_model.params=ModelParameters(*params)
+        fig, ax = greenspan_model.plot_until(14*24)
+        ax.plot(timepoints_meshgrid, outer_radius_mean_meshgrid,'.', color='darkgreen')
+        ax.plot(timepoints_meshgrid, necrotic_radius_mean_meshgrid,'.', color='darkred')
+        plt.show()
 
     def get_mean_profiles(self, metric: str = 'functional_radii') -> pd.DataFrame:
         """Calculate mean profiles across replicates.
@@ -419,16 +595,6 @@ class Analysis(Base):
         
         return analysis
 
-    def x__repr__(self) -> str:
-        """String representation showing analysis details."""
-        replicate_counts = {k: len(v.get_active_spheroids()) 
-                          for k, v in self.replicates_dict.items()}
-        
-        return (f"ANALYSIS: {self.name}\n\n"
-                f"Number of conditions: {len(replicate_counts)}\n"
-                f"Conditions and replicates: {replicate_counts}\n"
-                f"Added results: {', '.join(r.name for r in self.results)}")
-
     def set_config(self, **kwargs):
         """Update analysis configuration.
         
@@ -452,61 +618,6 @@ class Analysis(Base):
         """
         return self.config.copy()
 
-    def add_time_period(self, name: str, 
-                       start_times: dict[str, str | datetime | None] | None = None,
-                       end_times: dict[str, str | datetime | None] | None = None,
-                       conditions: list[str] | None = None):
-        """Add time periods to spheroids.
-        
-        Args:
-            name: Name for the time period
-            start_times: Dict mapping result names to start times (or None for first timepoint)
-            end_times: Dict mapping result names to end times (or None for last timepoint)
-            conditions: Optional list of conditions to apply to
-            
-        Example:
-            # Specific time ranges for each result
-            analysis.add_time_period(
-                "phase1",
-                start_times={
-                    'Day1_Result': '2024-01-01 00:00:00',
-                    'Day2_Result': '2024-01-02 00:00:00'
-                },
-                end_times={
-                    'Day1_Result': '2024-01-02 00:00:00',
-                    'Day2_Result': '2024-01-03 00:00:00'
-                }
-            )
-            
-            # From start of each result to specific times
-            analysis.add_time_period(
-                "early",
-                end_times={
-                    'Day1_Result': '2024-01-01 12:00:00',
-                    'Day2_Result': '2024-01-02 12:00:00'
-                }
-            )
-            
-            # All timepoints for all results
-            analysis.add_time_period("all")
-        """
-        target_conditions = conditions or self.replicates_dict.keys()
-        start_times = start_times or {}
-        end_times = end_times or {}
-        
-        for condition in target_conditions:
-            if condition in self.replicates_dict:
-                collection = self.replicates_dict[condition]
-                
-                # Add time period to each spheroid in collection
-                for spheroid in collection.get_active_spheroids():
-                    result_name = collection.replicate_metadata[spheroid.name]["result_name"]
-                    spheroid.add_time_period(
-                        name,
-                        start_times.get(result_name),  # None if result not in dict
-                        end_times.get(result_name)     # None if result not in dict
-                    )
-
     def get_time_periods(self) -> dict:
         """Get all defined time periods.
         
@@ -514,21 +625,6 @@ class Analysis(Base):
             Dictionary mapping period names to TimeWindow objects
         """
         return self.time_periods.copy()
-
-    def get_active_period(self, condition: str | None = None) -> str | None:
-        """Get active time period name.
-        
-        Args:
-            condition: Optional condition to check specific collection
-            
-        Returns:
-            Name of active period or None
-        """
-        if condition:
-            if condition not in self.replicates_dict:
-                raise ValueError(f"Condition '{condition}' not found")
-            return self.replicates_dict[condition].active_period
-        return self.active_period
 
     def save_to_hdf5(self):
         """Save analysis state to HDF5."""
@@ -554,3 +650,46 @@ class Analysis(Base):
                         result_group = abs_group.create_group(result_name)
                         result_group.attrs['start'] = start.isoformat()
                         result_group.attrs['end'] = end.isoformat()
+
+
+
+
+def process_spheroid(args):
+    """Process a single spheroid series and compute functional radii."""
+    result_name, condition, spheroid_series_data, live_channel, death_channel = args
+    local_results = {}
+
+    time = []
+    out, inh, nec = [], [], []
+    i = 0
+
+    for timepoint, spheroid_image_data in spheroid_series_data['images'].items():
+        try:
+            if spheroid_series_data['name'] not in local_results:
+                local_results[spheroid_series_data['name']] = {}
+
+            # Simulate functional radius calculation (replace with actual method logic if necessary)
+            radii = spheroid_image_data['functional_radius'](live_color=live_channel, death_color=death_channel)
+
+            local_results[spheroid_series_data['name']][timepoint] = radii
+
+            # Store results
+            result_radii = {
+                'outer_radius': radii['outer'],
+                'inhibited_radius': radii['inhibited'],
+                'necrotic_radius': radii['necrotic']
+            }
+            time.append(i / 24)
+            out.append(radii['outer'])
+            inh.append(radii['inhibited'])
+            nec.append(radii['necrotic'])
+            i += 2
+        except Exception as e:
+            print(f"Error processing {condition} at {timepoint}: {e}")
+
+    plt.plot(time, out, label='outer', color='darkgreen')
+    plt.plot(time, inh, label='inhibited', color='green')
+    plt.plot(time, nec, label='necrotic', color='red')
+    plt.show()
+
+    return result_name, condition, spheroid_series_data['name'], local_results
