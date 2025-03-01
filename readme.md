@@ -2,10 +2,9 @@
 [![PyPI version](https://badge.fury.io/py/SpheroidPy.svg)](https://badge.fury.io/py/SpheroidPy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-
-<img src="docs/source/_images/SpheroidPy_logo.png" width="150em" align="right" style="margin-left: 20px; margin-bottom: 20px;" />
-
 ## Overview
+
+<img src="docs/source/_images/SpheroidPy_logo.png" width="150em" align="right" style="margin-left: 20px; margin-bottom: 50px;" />
 
 `SpheroidPy` is a Python package designed for the management and analysis of _in-vitro_ spheroid data. 
 It offers a unified framework with an interface to facilitate the handling, segmentation, and analysis of extensive collections of spheroid microscopy images. 
@@ -15,20 +14,10 @@ While primarily developed and optimized for cancer spheroid proliferation and cy
 ## Applications
 
 ### Proliferation Assays
+<img src="docs/source/_images/spheroid_growth_example_movie.gif" width="180px" align="right" style="margin-left: 50px; margin-bottom: 50px;" />
 
-<div style="float: right; display: flex;gap: 30px; justify-content: space-between; margin-left: 15px; margin-bottom: 10px;">
-    <div style="text-align: center;">
-        <img src="docs/source/_images/spheroid_growth_plot.png" height="130" />
-        <p>Plot of Spheroid Growth</p>
-    </div>
-    <div style="text-align: center;">
-        <img src="docs/source/_images/spheroid_growth_example_movie.gif" height="130" />
-        <p>Timelapse Video</p>
-    </div>
-</div>
-
-Proliferation assays are essential for studying growth kinetics in three-dimensional spheroid cultures. Besides simple growth curves, also more complex behaviors - such as the emergence of a necrotic core at a critical size \( $R_c$ \) or saturation at large sizes - can be assessed from such data.
-SpheroidPy facilitates data import, spheroid segmentation, and comprehensive analysis of growth dynamics, including automated statistical evaluations.
+Proliferation assays are essential for studying growth kinetics in three-dimensional spheroid cultures. Besides simple growth curves, more complex behaviors - such as the emergence of a necrotic core at a critical size $R_c$ or saturation at large sizes - can be assessed from such data.
+`SpheroidPy` facilitates data import, spheroid segmentation, and comprehensive analysis of growth dynamics, including automated statistical evaluations.
 
 ### Cytotoxity Assays
 
@@ -52,7 +41,7 @@ After installation, `SpheroidPy` can be imported and utilized in Python scripts 
 from SpheroidPy import Experiment
 new_experiment = Experiment('ExperimentName', 96, 'path/to/directory')
 ```
-To enhance functionality, additional classes such as `Result`, `Platemap`, `Analysis` and `Visualisation` are provided. A brief overview of their usage is included below, with further details available in the [documentation](https://cedhe.github.io/SpheroidPy/SpheroidPy/docs/build/html/index.html). A short tutorial is available in the [examples](https://cedhe.github.io/SpheroidPy/SpheroidPy/examples) folder.
+To enhance functionality, additional classes such as `Result`, `Platemap`, `Analysis` and `Visualisation` are provided. A brief overview of their usage is included below, with further details available in the [documentation](https://cedhe.github.io/SpheroidPy/SpheroidPy/docs/build/html/index.html). A short tutorial is available in the [examples](https://github.com/CedHe/SpheroidPy/tree/master/examples) folder.
 
 Alternatively, there is a graphical user interface available. It can be started by running the following command in the terminal:
 
@@ -69,18 +58,21 @@ To be implemented...
 
 To be implemented...
 
-<div style="float: none; display: flex;gap: 20px; justify-content: space-between;">
-    <div style="text-align: center;">
-        <img src="docs/source/_images/overview_page.png" width="250" />
-        <p>Overview Page</p>
-    </div>
-    <div style="text-align: center;">
-        <img src="docs/source/_images/results_page.png" width="300" />
-        <p>Results Page</p>
-    </div>
-    <div style="text-align: center;">
-        <img src="docs/source/_images/analyses_page.png" width="250" />
-        <p>Analysis Page</p>
-    </div>
-</div>
-Figure: Interactive Visualisation of the obtained Results and Analysis Outcomes
+<table style="width: 100%; text-align: center; margin-left: auto; margin-right: auto;">
+  <tr>
+    <td style="padding: 10px;">
+      <img src="docs/source/_images/overview_page.png" width="250" />
+      <p>Overview Page</p>
+    </td>
+    <td style="padding: 10px;">
+      <img src="docs/source/_images/results_page.png" width="300" />
+      <p>Results Page</p>
+    </td>
+    <td style="padding: 10px;">
+      <img src="docs/source/_images/analyses_page.png" width="250" />
+      <p>Analysis Page</p>
+    </td>
+  </tr>
+</table>
+<p>Figure: Interactive Visualisation of the obtained Results and Analysis Outcomes</p>
+
