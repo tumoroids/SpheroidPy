@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+import logging
 
 import matplotlib.pyplot as plt
 from openpyxl import Workbook, load_workbook
@@ -19,6 +20,9 @@ from IPython.display import display
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
 from SpheroidPy.experiment.base import Base
+
+# Suppress noisy numexpr INFO logs in main and worker processes
+logging.getLogger("numexpr").setLevel(logging.WARNING)
 
 if TYPE_CHECKING:
     from SpheroidPy.experiment.experiment import Experiment
@@ -109,7 +113,7 @@ class Result(Base):
     metric_dfs: dict  # stores the metrics of an experiment (once they have been calculated)
 
     # Visualisation
-    plot_name_dict: dict = {'radius': r'effective Radius ($r_{eff}=\frac{Area}{\pi}$) [µm]'}
+    plot_name_dict: dict = {'radius': r'effective Radius ($r_{eff}=\sqrt{\frac{Area}{\pi}}$) [µm]'}
     data_has_been_loaded: bool
 
     def __init__(self, name: str, experiment: Experiment):
@@ -341,7 +345,7 @@ class Result(Base):
 
         # Get valid wells from platemap
         wells = list(self.files_dict['brightfield'].keys())
-        wells = [well for well in wells if any(well in value_list for value_list in self.platemap.replicates.values())]
+        wells = [well for well in wells if any(well in value_list for value_list in self.platemap.replicates().values())]
         wells.sort(key=lambda x: (int(x[1:]), x[0]))
 
         print('Looking for Wells:', wells)
@@ -398,24 +402,31 @@ class Result(Base):
         Args:
             args: Tuple containing:
                 - well: Well identifier
-                - spheroid_dict: Dictionary of spheroid images
+                - timepoints: List of timepoints for this well
+                - spheroid_images: Dictionary mapping timepoints to spheroid images
                 - methods: Segmentation methods specification
                 - reconstruct_border: Whether to reconstruct border
+                - border_margin: Margin in pixels for border detection
                 - kwargs: Additional segmentation parameters
 
         Returns:
             Tuple of (well, success_count, total_count, contour_data)
         """
-        well, spheroid_dict, methods, reconstruct_border, kwargs = args
+        well, timepoints, spheroid_images, methods, reconstruct_border, border_margin, kwargs = args
         success_count = 0
         total_count = 0
         contour_data = {}
 
-        for timepoint, spheroid_image in spheroid_dict[well].spheroid_image_dict.items():
+        for timepoint in timepoints:
+            if timepoint not in spheroid_images:
+                continue
+                
+            spheroid_image = spheroid_images[timepoint]
             try:
                 spheroid_image.segmentation(
                     methods=methods,
                     reconstruct_border=reconstruct_border,
+                    border_margin=border_margin,
                     **kwargs
                 )
                 if spheroid_image.contour is not None:
@@ -427,7 +438,7 @@ class Result(Base):
                     }
                 total_count += 1
             except Exception as e:
-                print(f"Error processing {well}: {str(e)}")
+                print(f"Error processing {well} at {timepoint}: {str(e)}")
                 continue
 
         return well, success_count, total_count, contour_data
@@ -435,6 +446,7 @@ class Result(Base):
     def segmentation(self,
                      methods: str | tuple | list = ('thresholding', 'fluorescence_green'),
                      reconstruct_border: bool = True,
+                     border_margin: int = 10,
                      **kwargs) -> None:
         """Perform spheroid segmentation across all images using multiprocessing.
 
@@ -448,11 +460,11 @@ class Result(Base):
                 - list: List of (method, channel) tuples to try in order
             reconstruct_border: Whether to reconstruct spheroid border when it
                 extends beyond image bounds
+            border_margin: Margin in pixels for border detection (default: 10)
             **kwargs: Method-specific parameters:
                 For thresholding:
                     threshold: Intensity threshold multiplier (default: 1.35)
                     use_yen: Whether to use Yen's method (default: True)
-                    border_margin: Margin in pixels for border detection (default: 5)
                 For AI:
                     confidence: Detection confidence threshold (default: 0.65)
 
@@ -472,12 +484,27 @@ class Result(Base):
         if not self.data_has_been_loaded:
             raise Exception('No data has been loaded!')
 
-        # Prepare arguments for parallel processing
+        # Prepare arguments for parallel processing - only pass necessary data
         wells = list(self.spheroid_dict.keys())
-        well_args = [
-            (well, self.spheroid_dict, methods, reconstruct_border, kwargs)
-            for well in wells
-        ]
+        well_args = []
+        
+        for well in wells:
+            if well not in self.spheroid_dict:
+                continue
+                
+            # Get timepoints and prepare spheroid images dict for this well
+            timepoints = list(self.spheroid_dict[well].spheroid_image_dict.keys())
+            spheroid_images = self.spheroid_dict[well].spheroid_image_dict
+            
+            well_args.append((
+                well, 
+                timepoints,
+                spheroid_images,
+                methods, 
+                reconstruct_border,
+                border_margin,
+                kwargs
+            ))
 
         # Process wells in parallel
         with mp.Pool(processes=self.num_cores) as pool:
@@ -618,7 +645,8 @@ class Result(Base):
     def metric(self, name: str = 'radius', mean: bool = False,
                plot: bool = False, skip_nan: bool = False,
                interpolate: bool = True, ignore_border: bool = True,
-               element_name: str | None = None) -> pd.DataFrame | tuple:
+               element_name: str | None = None, update: bool = True,
+               timepoint: float | str | datetime | None = None) -> pd.DataFrame | tuple:
         """Calculate specified metric across wells and timepoints.
 
         Computes metrics like radius or area for each well/timepoint and optionally
@@ -632,6 +660,12 @@ class Result(Base):
             interpolate: Whether to interpolate missing timepoints
             ignore_border: Whether to exclude spheroids touching image border
             element_name: Optional name of cell line or compound to filter replicates by
+            update: Whether to update cached metrics
+            timepoint: Optional specific timepoint to calculate metrics for:
+                - Relative timepoint in hours from experiment start
+                - Datetime string in format 'YYYY-MM-DD HH:MM:SS'
+                - Datetime object
+                If None, calculates for all timepoints
 
         Returns:
             DataFrame containing metric values, optionally with mean/std across replicates
@@ -639,34 +673,48 @@ class Result(Base):
         if not self.data_has_been_loaded:
             raise Exception('No Data has been loaded so far!')
 
+        # Convert timepoint to relative hours if needed
+        if timepoint is not None:
+            if isinstance(timepoint, str):
+                timepoint = datetime.strptime(timepoint, '%Y-%m-%d %H:%M:%S')
+            if isinstance(timepoint, datetime):
+                # Get first timepoint from any spheroid series
+                first_series = next(iter(self.replicates(element_name).values())).spheroid_series[0]
+                first_time = datetime.strptime(sorted(first_series.spheroid_image_dict.keys())[0], '%Y-%m-%d %H:%M:%S')
+                timepoint = (timepoint - first_time).total_seconds() / 3600
+
         # Check if metric has been computed previously
         metric_key = f"{name}_{'mean' if mean else 'raw'}"
-        if metric_key in self.metric_dfs and element_name is None:
+        if metric_key in self.metric_dfs and element_name is None and not update and timepoint is None:
             result_df = self.metric_dfs[metric_key]
         else:
             if mean:
                 # Calculate metrics using SpheroidCollections (replicates)
                 collection_dfs = []
                 for collection in self.replicates(element_name).values():
-                    df = collection.calculate_metric(
+                    df = collection.metric(
                         name=name,
                         mean=True,
                         interpolate=interpolate,
                         ignore_border=ignore_border,
-                        skip_nan=skip_nan
+                        skip_nan=skip_nan,
+                        timepoint=timepoint
                     )
                     collection_dfs.append(df)
                 
                 # Combine all collection results
                 result_df = pd.concat(collection_dfs, axis=1)
+                
             else:
                 # Calculate metrics for each spheroid series
                 all_dfs = []
                 for well, spheroid_series in self.spheroid_dict.items():
-                    df = spheroid_series.calculate_metric(
+                    df = spheroid_series.metric(
                         name=name,
                         interpolate=interpolate,
-                        ignore_border=ignore_border
+                        ignore_border=ignore_border,
+                        timepoint=timepoint,
+                        plot=False
                     )
                     # Rename the column to use well ID directly instead of "Spheroid-" prefix
                     df.columns = [well]
@@ -675,8 +723,8 @@ class Result(Base):
                 # Combine all individual DataFrames
                 result_df = pd.concat(all_dfs, axis=1)
             
-            # Store for future use only if not filtered by element
-            if element_name is None:
+            # Store for future use only if not filtered by element and calculating all timepoints
+            if element_name is None and timepoint is None:
                 self.metric_dfs[metric_key] = result_df
 
         # Handle plotting if requested
@@ -686,56 +734,83 @@ class Result(Base):
         return result_df
 
     def _plot_metric(self, df: pd.DataFrame, mean: bool, skip_nan: bool, name: str):
-        """Helper method to plot metric results."""
-        if mean:
-            # Plot with error bars for mean values
-            df_reshaped = np.array(df.columns).reshape(int(len(list(df.columns)) / 2), 2)
-            for tuple_ in df_reshaped:
-                condition = tuple_[0][0]  # Get condition name from MultiIndex
-                mean_col = (condition, 'mean')
-                std_col = (condition, 'std')
-                
-                x = np.array(df.index.to_list()) / 24
-                mean_array = df[mean_col]
-                std_array = df[std_col]
-                
-                if skip_nan:
-                    valid_indices = ~np.isnan(mean_array)
-                    mean_array = mean_array[valid_indices]
-                    std_array = std_array[valid_indices]
-                    x = x[valid_indices]
-
-                plt.fill_between(x, mean_array - std_array, mean_array + std_array,
-                                alpha=0.5, color='gray')
-                plt.plot(x, mean_array, label=condition)
-
-            plt.xlabel('Time [d]')
-            if name in self.plot_name_dict:
-                plt.ylabel(rf'{self.plot_name_dict[name]}')
-            else:
-                plt.ylabel('Value')
-            plt.legend(fontsize=6)
-        else:
-            # Plot individual well data
-            for index in list(df.columns):
-                if skip_nan:
-                    valid_indices = ~np.isnan(df[index])
-                    x = (np.array(df.index.to_list()) / 24)[valid_indices]
-                    y = (df[index])[valid_indices]
-                else:
-                    x = (np.array(df.index.to_list()) / 24)
-                    y = (df[index])
-                plt.plot(x, y, label=f"{index}")
-            
-            plt.xlabel('Time [d]')
-            if name in self.plot_name_dict:
-                plt.ylabel(rf'{self.plot_name_dict[name]}')
-            plt.legend()
+        """Plot metric data with error bars if mean=True."""
+        plt.figure(figsize=(6, 4))
         
-        plt.show()
-    # todo
-    def _worksheet(self, workbook: Workbook) -> Workbook:
-        pass
+        if mean:
+            x = np.array(df.index.to_list()) / 24  # Convert to days
+            
+            # Handle both old-style ('condition', 'mean') and new-style 'mean' column names
+            if isinstance(df.columns, pd.MultiIndex):
+                # Old style - multiindex columns
+                for condition in df.columns.levels[0]:
+                    mean_col = (condition, 'mean')
+                    std_col = (condition, 'std')
+                    
+                    mean_array = df[mean_col]
+                    std_array = df[std_col]
+                    
+                    if skip_nan:
+                        valid_mask = ~np.isnan(mean_array)
+                        x_plot = x[valid_mask]
+                        mean_plot = mean_array[valid_mask]
+                        std_plot = std_array[valid_mask]
+                    else:
+                        x_plot = x
+                        mean_plot = mean_array
+                        std_plot = std_array
+                    
+                    plt.fill_between(x_plot, 
+                                   mean_plot - std_plot,
+                                   mean_plot + std_plot,
+                                   alpha=0.3)
+                    plt.plot(x_plot, mean_plot, label=condition)
+            else:
+                # New style - simple mean/std columns
+                mean_array = df['mean']
+                std_array = df['std']
+                
+                if skip_nan:
+                    valid_mask = ~np.isnan(mean_array)
+                    x_plot = x[valid_mask]
+                    mean_plot = mean_array[valid_mask]
+                    std_plot = std_array[valid_mask]
+                else:
+                    x_plot = x
+                    mean_plot = mean_array
+                    std_plot = std_array
+                
+                plt.fill_between(x_plot, 
+                               mean_plot - std_plot,
+                               mean_plot + std_plot,
+                               alpha=0.3)
+                plt.plot(x_plot, mean_plot)
+        else:
+            # Plot individual series
+            for col in df.columns:
+                y = df[col]
+                x = np.array(df.index.to_list()) / 24
+                
+                if skip_nan:
+                    valid_mask = ~np.isnan(y)
+                    plt.plot(x[valid_mask], y[valid_mask], label=col, alpha=0.7)
+                else:
+                    plt.plot(x, y, label=col, alpha=0.7)
+        
+        plt.grid(True, alpha=0.3)
+        plt.xlabel('Time [d]')
+        
+        # Use plot_name_dict if available
+        if name in self.plot_name_dict:
+            plt.ylabel(rf'{self.plot_name_dict[name]}')
+        else:
+            plt.ylabel(name)
+            
+        if not mean or len(df.columns) < 10:  # Only show legend if not too many series
+            plt.legend()
+            
+        plt.title(f'{name} over time' + (' (mean ± std)' if mean else ''))
+        plt.tight_layout()
 
     def save_time_periods_to_hdf5(self):
         """Save time periods to HDF5 file for all collections."""
@@ -795,75 +870,163 @@ class Result(Base):
             collection.remove_time_period(name)
         self.save_time_periods_to_hdf5()
 
-    def condition_slice(self, element_name: str, timepoint: float, 
+    def condition_slice(self, element_name: str, timepoint: float | str | datetime, 
                         metric: str = 'radius', plot: bool = True) -> pd.DataFrame:
         """Analyze metric values across conditions at a specific timepoint.
         
         Args:
             element_name: Name of cell line or compound to analyze
-            timepoint: Relative timepoint in hours to analyze
+            timepoint: Either:
+                - Relative timepoint in hours from experiment start
+                - Datetime string in format 'YYYY-MM-DD HH:MM:SS'
+                - Datetime object
             metric: Metric to analyze ('radius', 'area', 'fluorescence_*')
-            plot: Whether to display a bar plot of results
+            plot: Whether to display a line plot of results
             
         Returns:
-            DataFrame with mean and std values for each condition
+            DataFrame with columns:
+                - condition: Cell line or compound name
+                - condition_value: Numerical value of the condition (if applicable)
+                - mean: Mean value of the metric
+                - std: Standard deviation of the metric
         """
-        # Get metrics for the element's replicates
+        # Convert timepoint to relative hours if needed
+        if isinstance(timepoint, str):
+            timepoint = datetime.strptime(timepoint, '%Y-%m-%d %H:%M:%S')
+        if isinstance(timepoint, datetime):
+            # Get first timepoint from any spheroid series
+            first_series = next(iter(self.replicates(element_name).values())).spheroid_series[0]
+            first_time = datetime.strptime(sorted(first_series.spheroid_image_dict.keys())[0], '%Y-%m-%d %H:%M:%S')
+            timepoint = (timepoint - first_time).total_seconds() / 3600
+        
+        # Get metrics for the element's replicates at the specific timepoint
+        # Always use interpolation to handle missing values
         df = self.metric(
             name=metric,
             mean=True,
             element_name=element_name,
-            plot=False
+            plot=False,
+            timepoint=timepoint,
+            interpolate=True  # Force interpolation
         )
         
-        # Find closest available timepoint
-        available_times = df.index.values
-        closest_time = available_times[np.abs(available_times - timepoint).argmin()]
-        
         # Extract values at that timepoint
-        slice_df = df.loc[closest_time]
+        slice_df = df.iloc[0]  # Since we only have one timepoint now
         
         # Reshape into more readable format
         conditions = []
+        condition_values = []
         means = []
         stds = []
         
         for col in df.columns:
             if col[1] == 'mean':  # Only process mean columns
                 condition = col[0]  # Get condition name from MultiIndex
-                if isinstance(condition, tuple):
-                    condition_value = condition[1]  # Get the value (e.g. concentration)
-                else:
-                    condition_value = str(condition)  # Use condition as is if not a tuple
                 
+                # Handle string representation of tuple
+                if isinstance(condition, str) and condition.startswith("((") and condition.endswith(",)"):
+                    # Remove outer parentheses and split by comma
+                    inner_part = condition.strip("()").strip(",")  # Remove outer () and trailing comma
+                    # Remove the next layer of parentheses
+                    content = inner_part.strip("()").split(",")
+                    
+                    # Extract cell line name (remove quotes)
+                    condition_name = content[0].strip().strip("'")
+                    
+                    # Extract numeric value (should be the second element)
+                    try:
+                        condition_value = float(content[1].strip())
+                    except (ValueError, IndexError):
+                        condition_value = None
+                        
+                # Handle tuple format from platemap's find_replicates
+                elif isinstance(condition, tuple):
+                    if len(condition) == 1 and isinstance(condition[0], tuple):
+                        inner_tuple = condition[0]
+                        condition_name = inner_tuple[0]
+                        try:
+                            condition_value = float(inner_tuple[1])
+                        except (ValueError, TypeError):
+                            condition_value = inner_tuple[1]
+                    else:
+                        condition_name = element_name
+                        try:
+                            condition_value = float(condition[0])
+                        except (ValueError, TypeError):
+                            condition_value = condition[0]
+                else:
+                    condition_name = element_name
+                    try:
+                        condition_value = float(condition)
+                    except (ValueError, TypeError):
+                        condition_value = condition
+                
+                conditions.append(condition_name)
+                condition_values.append(condition_value)
                 means.append(slice_df[col])
                 stds.append(slice_df[(condition, 'std')])
-                conditions.append(condition_value)
         
         result_df = pd.DataFrame({
             'condition': conditions,
+            'condition_value': condition_values,
             'mean': means,
             'std': stds
         })
-        result_df = result_df.sort_values('condition')
         
+        # Sort by condition values if they're numeric
+        if all(isinstance(x, (int, float)) for x in condition_values):
+            result_df = result_df.sort_values('condition_value')
+
         if plot:
-            plt.figure(figsize=(8, 5))
-            plt.bar(
-                range(len(conditions)), 
+            plt.figure(figsize=(8, 6))  # Größer für Poster
+
+            # Posterfreundlicher Plotstil
+            #plt.style.use("seaborn-white")  # Clean look
+
+            # Fehlerbalken-Liniendiagramm
+            plt.errorbar(
+                result_df['condition_value'],
                 result_df['mean'],
                 yerr=result_df['std'],
-                capsize=5,
-                alpha=0.7
+                fmt='o-',  # Punkte mit Linien
+                color="#005c99",  # kontrastreicher Blauton
+                ecolor="#005c99",  # neutrale Fehlerbalkenfarbe
+                capsize=6,
+                elinewidth=2,
+                linewidth=2.5,
+                markersize=8,
+                alpha=0.9
             )
-            plt.xticks(range(len(conditions)), result_df['condition'], rotation=45)
-            plt.xlabel(element_name)
-            if metric in self.plot_name_dict:
-                plt.ylabel(rf'{self.plot_name_dict[metric]}')
-            else:
-                plt.ylabel(metric)
-            plt.title(f'{metric} at {closest_time:.1f}h')
+
+            # Achsentitel
+            #plt.xlabel(f"{element_name} concentration", fontsize=20, labelpad=10)
+            plt.xlabel(f"Seeding Cell Number", fontsize=20, labelpad=10)
+            ylabel = "Spheroid Area $[µm^2]$"#self.plot_name_dict.get(metric, metric)
+            plt.ylabel(ylabel, fontsize=20, labelpad=10)
+
+            # Titel
+            plt.title(f"{metric} at {timepoint:.1f} h", fontsize=24, fontweight="bold", pad=15)
+            plt.title(f"Huh7", fontsize=20, fontweight="bold", pad=15)
+
+            # Achsenticks vergrößern
+            plt.xticks(fontsize=16)
+            plt.yticks(fontsize=16)
+
+            # Optionale logarithmische Skala für die X-Achse
+            if all(isinstance(x, (int, float)) for x in condition_values):
+                max_val = max(condition_values)
+                min_val = min(condition_values)
+                if min_val > 0 and max_val / min_val > 100:
+                    plt.xscale('log')
+                    #plt.xlabel(f"log-scaled {element_name} concentration", fontsize=20, labelpad=10)
+
+            # Gitter subtil halten
+            plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.3)
+
+            # Ränder optimieren
             plt.tight_layout()
+
+            # Plot anzeigen
             plt.show()
-            
+
         return result_df

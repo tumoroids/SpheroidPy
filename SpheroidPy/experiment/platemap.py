@@ -406,10 +406,26 @@ class Platemap:
         if group_name not in ['cell_line', 'compound']:
             raise Exception('Group name must be "cell_line", "compound"')
 
-        df.to_hdf(self.hdf5_path, key=f'{self.hdf5_key}/{group_name}/{df_name}', mode='a')  # , format='table')
+        # 1) Sanitize the name for a valid HDF5 path (avoid NaturalNameWarning)
+        safe_name = re.sub(r'[^0-9a-zA-Z_]', '_', str(df_name))
+        # Do not start with a digit
+        if safe_name and safe_name[0].isdigit():
+            safe_name = f'_{safe_name}'
+
+        # 2) Coerce to numeric so PyTables doesn't pickle object dtypes (avoid PerformanceWarning)
+        df_to_store = df.copy()
+        df_to_store = df_to_store.apply(pd.to_numeric, errors='coerce')
+        # Optional: make column labels numeric when possible
+        try:
+            df_to_store.columns = [int(c) if isinstance(c, str) and c.isdigit() else c for c in df_to_store.columns]
+        except Exception:
+            pass
+
+        # 3) Store as table format explicitly
+        df_to_store.to_hdf(self.hdf5_path, key=f'{self.hdf5_key}/{group_name}/{safe_name}', mode='a', format='table')
         '''  hdf5 Structure '''
         with h5py.File(self.hdf5_path, 'a') as hdf_file:
-            current_group = hdf_file[f'{self.hdf5_key}/{group_name}/{df_name}']
+            current_group = hdf_file[f'{self.hdf5_key}/{group_name}/{safe_name}']
             current_group.attrs['date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # todo

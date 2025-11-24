@@ -660,7 +660,7 @@ class Visualisation:
                             # Draw contour if checkbox is checked and contour exists
                             if show_contour.value and image.contour is not None:  # Check base contour first
                                 contour = image.scaled_contour  # Only access scaled_contour if contour exists
-                                plt.plot(contour[:, 0], contour[:, 1], 'r-', linewidth=1)
+                                plt.plot(contour[:, 0], contour[:, 1], 'w-', linewidth=3)
                             
                             # Add scale bar (300µm)
                             scalebar = AnchoredSizeBar(
@@ -701,8 +701,8 @@ class Visualisation:
         # Initial image display
         update_images()
         
-        # Segmentation controls
-        segmentation_controls = self._create_segmentation_controls()
+        # Segmentation controls (pass image_section so handlers can access current channel)
+        segmentation_controls = self._create_segmentation_controls(image_section)
         
         return widgets.VBox([
             widgets.HTML(value="<h3 style='color: #2c3e50;'>Image Viewer</h3>"),
@@ -711,8 +711,12 @@ class Visualisation:
             segmentation_controls
         ], layout=widgets.Layout(margin='20px 0'))
 
-    def _create_segmentation_controls(self) -> widgets.VBox:
-        """Create segmentation control panel."""
+    def _create_segmentation_controls(self, image_section=None) -> widgets.VBox:
+        """Create segmentation control panel.
+        
+        Args:
+            image_section: Optional image section widget to access current channel selection
+        """
         header = widgets.HTML(
             value="<h4 style='color: #2c3e50;'>Segmentation Options</h4>"
         )
@@ -768,10 +772,42 @@ class Visualisation:
                 return
             spheroid = self._current_result.spheroid_dict[self._current_well]
             image = spheroid.spheroid_image_dict[self._current_result.time_points_array[self._current_time_index]]
+            
+            # Get current channel from first image view dropdown
+            if image_section and image_section.children and len(image_section.children) > 0:
+                channel_view = image_section.children[0]
+                if channel_view.children and len(channel_view.children) > 0:
+                    current_channel = channel_view.children[0].value
+                else:
+                    current_channel = 'brightfield'
+            else:
+                current_channel = 'brightfield'
+            
             try:
-                pass  # Manual segmentation not implemented yet
-            except:
-                print('error!')
+                # Use the segmentation_manual method
+                image.segmentation_manual(current_channel)
+                
+                # Save contour to HDF5
+                if image.contour is not None:
+                    with h5py.File(self._current_result.hdf5_path, 'a') as hdf_file:
+                        spheroid_image_group = hdf_file[image.hdf5_key]
+                        if 'contour' in spheroid_image_group:
+                            del spheroid_image_group['contour']
+                        if 'touches_border' in spheroid_image_group.attrs:
+                            del spheroid_image_group.attrs['touches_border']
+                        spheroid_image_group.create_dataset('contour', data=image.contour)
+                        spheroid_image_group.attrs['touches_border'] = image.contour_touches_border
+                    
+                    # Update metrics for current timepoint
+                    rel_time = self._current_result.relative_time_array[self._current_time_index]
+                    for metric_name in self._current_result.metric_dfs:
+                        if metric_name in ['radius', 'area']:
+                            self._current_result.metric_dfs[metric_name].loc[rel_time, self._current_well] = getattr(image, metric_name)
+                
+                # Update display
+                self._update_result_view()
+            except Exception as e:
+                print(f"Manual segmentation failed: {str(e)}")
 
         def thresholding_segmentation(b):
             if not self._current_result or not self._current_well:
@@ -779,86 +815,93 @@ class Visualisation:
             spheroid = self._current_result.spheroid_dict[self._current_well]
             image = spheroid.spheroid_image_dict[self._current_result.time_points_array[self._current_time_index]]
 
+            # Get current channel from first image view dropdown
+            if image_section and image_section.children and len(image_section.children) > 0:
+                channel_view = image_section.children[0]
+                if channel_view.children and len(channel_view.children) > 0:
+                    current_channel = channel_view.children[0].value
+                else:
+                    current_channel = 'fluorescence_green'
+            else:
+                current_channel = 'fluorescence_green'
+
             try:
-                # Perform thresholding segmentation
-                image.contour, image.contour_touches_border = image.segmentation_thresholding(
-                    'fluorescence_green', thresholding_input.value)
+                # Use the segmentation() method which handles everything correctly
+                image.segmentation(
+                    methods=('thresholding', current_channel),
+                    reconstruct_border=True,
+                    border_margin=10,
+                    threshold=thresholding_input.value
+                )
                 
-                if image.contour_touches_border:
-                    try:
-                        border_margin = 5
-                        image.contour = add_fitted_contour(
-                            image.contour,
-                            fit_ellipse(image.contour)[-1],
-                            image._width - border_margin - 1,
-                            image._height - border_margin - 1,
-                            border_margin + 1, border_margin + 1
-                        )
-                    except:
-                        pass
-                
-                 # Save contour to HDF5
-                with h5py.File(self._current_result.hdf5_path, 'a') as hdf_file:
-                    spheroid_image_group = hdf_file[image.hdf5_key]
-                    if 'contour' in spheroid_image_group:
-                        del spheroid_image_group['contour']
-                        del spheroid_image_group.attrs['touches_border']
-                    spheroid_image_group.create_dataset('contour', data=image.contour)
-                    spheroid_image_group.attrs['touches_border'] = image.contour_touches_border
-                
-                # Update metrics for current timepoint
-                rel_time = self._current_result.relative_time_array[self._current_time_index]
-                for metric_name in self._current_result.metric_dfs:
-                    if metric_name in ['radius', 'area']:  # Add other metrics as needed
-                        self._current_result.metric_dfs[metric_name].loc[rel_time, self._current_well] = getattr(image, metric_name)
+                # Save contour to HDF5
+                if image.contour is not None:
+                    with h5py.File(self._current_result.hdf5_path, 'a') as hdf_file:
+                        spheroid_image_group = hdf_file[image.hdf5_key]
+                        if 'contour' in spheroid_image_group:
+                            del spheroid_image_group['contour']
+                        if 'touches_border' in spheroid_image_group.attrs:
+                            del spheroid_image_group.attrs['touches_border']
+                        spheroid_image_group.create_dataset('contour', data=image.contour)
+                        spheroid_image_group.attrs['touches_border'] = image.contour_touches_border
+                    
+                    # Update metrics for current timepoint
+                    rel_time = self._current_result.relative_time_array[self._current_time_index]
+                    for metric_name in self._current_result.metric_dfs:
+                        if metric_name in ['radius', 'area']:
+                            self._current_result.metric_dfs[metric_name].loc[rel_time, self._current_well] = getattr(image, metric_name)
                 
                 # Update display
                 self._update_result_view()
             except Exception as e:
-                print(f"AI segmentation failed: {str(e)}")
+                print(f"Thresholding segmentation failed: {str(e)}")
 
         def ai_segmentation(b):
             if not self._current_result or not self._current_well:
                 return
             spheroid = self._current_result.spheroid_dict[self._current_well]
             image = spheroid.spheroid_image_dict[self._current_result.time_points_array[self._current_time_index]]
+            
+            # Get current channel from first image view dropdown
+            if image_section and image_section.children and len(image_section.children) > 0:
+                channel_view = image_section.children[0]
+                if channel_view.children and len(channel_view.children) > 0:
+                    current_channel = channel_view.children[0].value
+                else:
+                    current_channel = 'brightfield'
+            else:
+                current_channel = 'brightfield'
+            
             try:
-                # Perform AI segmentation
-                image.contour, image.contour_touches_border = image.segmentation_detectron(
-                    'brightfield', ai_input.value)
-                
-                if image.contour_touches_border:
-                    try:
-                        border_margin = 5
-                        image.contour = add_fitted_contour(
-                            image.contour,
-                            fit_ellipse(image.contour)[-1],
-                            image._width - border_margin - 1,
-                            image._height - border_margin - 1,
-                            border_margin + 1, border_margin + 1
-                        )
-                    except:
-                        pass
+                # Use the segmentation() method which handles everything correctly
+                image.segmentation(
+                    methods=('ai', current_channel),
+                    reconstruct_border=True,
+                    border_margin=10,
+                    confidence=ai_input.value
+                )
                 
                 # Save contour to HDF5
-                with h5py.File(self._current_result.hdf5_path, 'a') as hdf_file:
-                    spheroid_image_group = hdf_file[image.hdf5_key]
-                    if 'contour' in spheroid_image_group:
-                        del spheroid_image_group['contour']
-                        del spheroid_image_group.attrs['touches_border']
-                    spheroid_image_group.create_dataset('contour', data=image.contour)
-                    spheroid_image_group.attrs['touches_border'] = image.contour_touches_border
+                if image.contour is not None:
+                    with h5py.File(self._current_result.hdf5_path, 'a') as hdf_file:
+                        spheroid_image_group = hdf_file[image.hdf5_key]
+                        if 'contour' in spheroid_image_group:
+                            del spheroid_image_group['contour']
+                        if 'touches_border' in spheroid_image_group.attrs:
+                            del spheroid_image_group.attrs['touches_border']
+                        spheroid_image_group.create_dataset('contour', data=image.contour)
+                        spheroid_image_group.attrs['touches_border'] = image.contour_touches_border
                                
-                # Update metrics for current timepoint
-                rel_time = self._current_result.relative_time_array[self._current_time_index]
-                for metric_name in self._current_result.metric_dfs:
-                    if metric_name in ['radius', 'area']:  # Add other metrics as needed
-                        self._current_result.metric_dfs[metric_name].loc[rel_time, self._current_well] = getattr(image, metric_name)
+                    # Update metrics for current timepoint
+                    rel_time = self._current_result.relative_time_array[self._current_time_index]
+                    for metric_name in self._current_result.metric_dfs:
+                        if metric_name in ['radius', 'area']:
+                            self._current_result.metric_dfs[metric_name].loc[rel_time, self._current_well] = getattr(image, metric_name)
                 
                 # Update display
                 self._update_result_view()
             except Exception as e:
-                print(f"Thresholding segmentation failed: {str(e)}")
+                print(f"AI segmentation failed: {str(e)}")
 
 
         def delete_contour(b):
@@ -874,13 +917,15 @@ class Visualisation:
             # Remove contour from HDF5
             with h5py.File(self._current_result.hdf5_path, 'a') as hdf_file:
                 spheroid_image_group = hdf_file[image.hdf5_key]
-                del spheroid_image_group['contour']
-                spheroid_image_group.create_dataset('contour', data=np.nan)
+                if 'contour' in spheroid_image_group:
+                    del spheroid_image_group['contour']
+                if 'touches_border' in spheroid_image_group.attrs:
+                    del spheroid_image_group.attrs['touches_border']
             
             # Update metrics for current timepoint with NaN
             rel_time = self._current_result.relative_time_array[self._current_time_index]
             for metric_name in self._current_result.metric_dfs:
-                if metric_name in ['radius', 'area']:  # Add other metrics as needed
+                if metric_name in ['radius', 'area']:
                     self._current_result.metric_dfs[metric_name].loc[rel_time, self._current_well] = np.nan
             
             # Update display

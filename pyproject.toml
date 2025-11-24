@@ -1,0 +1,50 @@
+[project]
+name = "SpheroidPy"
+version = "0.1.0"
+description = "Python Package for the Analysis of Spheroid Imaging Data"
+authors = [
+    { name = "Cedric Heuermann", email = "cedric.heuermann@tumoroid.org" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "h5py",
+    "ipython",
+    "ipywidgets",
+    "matplotlib",
+    "MeshPy",
+    "numpy",
+    "opencv-python",        # oder opencv-python-headless
+    "openpyxl",
+    "pandas",
+    "Pillow",
+    "psutil",
+    "scipy",
+    "seaborn",
+    "Shapely",
+    "scikit-image",
+    "tifffile",
+    "tqdm",
+    "tables",
+    "olefile"
+]
+
+[project.optional-dependencies]
+detectron2 = []
+
+[project.urls]
+homepage = "https://github.com/CedHe/SpheroidPy"
+repository = "https://github.com/CedHe/SpheroidPy"
+issues = "https://github.com/CedHe/SpheroidPy/issues"
+documentation = "https://tumoroid.org"  # optional
+
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["docs*", "examples*"]

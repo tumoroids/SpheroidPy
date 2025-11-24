@@ -1,5 +1,6 @@
 /.github/
 /.conda/
 /.ipynb_checkpoints/
-/docs/build
 /SpheroidPy/weights
+/SpheroidPy/application
+/SpheroidPy/application_ctk

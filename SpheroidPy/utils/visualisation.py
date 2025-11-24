@@ -24,27 +24,31 @@ def interpolate_color(value, min_value, max_value, start_color, end_color):
     return f'{r:02X}{g:02X}{b:02X}'
 
 ''' SpheroidImage'''
-def plot_mesh(points, triangles):
+def plot_mesh(points, triangles, savepath: str | None = None):
     import matplotlib.pyplot as plt
     """
     Plottet ein Mesh.
+    
+    Args:
+        points: Mesh vertex coordinates
+        triangles: Mesh connectivity
+        savepath: Optional path to save the plot. If None, plot is only displayed.
     """
     plt.figure()
     plt.triplot(points[:, 0], points[:, 1], triangles, color='blue', linewidth=0.5)
-    plt.plot(points[:, 0], points[:, 1], 'o', color='red')
-    plt.title('Generated Mesh')
+    #plt.plot(points[:, 0], points[:, 1], 'o', color='red')
+    plt.title('ContourMesh', fontweight='bold')
     plt.xlabel('x-position [µm]')
     plt.ylabel('y-position [µm]')
     plt.axis('equal')
+    # Flip y to have origin at top-left if input points use image coordinates
+    if points.shape[0] > 0:
+        ymin, ymax = points[:, 1].min(), points[:, 1].max()
+        if ymax > ymin:
+            plt.ylim(ymax, ymin)
     plt.grid()
+    if savepath is not None:
+        plt.savefig(savepath, transparent=True, dpi=300, bbox_inches='tight')
     plt.show()
-
-''' SpheroidSeries '''
-import matplotlib.pyplot as plt
-import ipywidgets as widgets
-from IPython.display import display
-import numpy as np
-
-
 
 

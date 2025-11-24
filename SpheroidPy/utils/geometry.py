@@ -1,8 +1,10 @@
-import matplotlib.pyplot as plt
-import numpy as np
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import argrelextrema
-
+import numpy as np
+import logging
+from typing import Optional, Tuple
+from skimage.measure import EllipseModel
+logger = logging.getLogger("SpheroidPy.utils.geometry")
 
 def find_inflection_point(y_array, x_array=None, sigma=None):
     """
@@ -73,94 +75,124 @@ def remove_border_points(contour: np.ndarray, x_max, y_max, x_min=0, y_min=0) ->
 
     return filtered_contour
 
-import numpy as np
-from skimage.measure import EllipseModel
 
-def fit_ellipse(contour_points: np.ndarray) -> EllipseModel:
-    # Fitten der Ellipse
-    ellipse_model = EllipseModel()
-    success = ellipse_model.estimate(contour_points)
+def fit_ellipse(contour_points: np.ndarray) -> Optional[Tuple[Tuple[float, float], float, float, np.ndarray]]:
+    """Fit an ellipse to a set of contour points.
 
-    # Berechnung der Fläche der Ellipse, wenn das Fitting erfolgreich war
-    if success:
-        xc, yc, a, b, theta = ellipse_model.params  # xc, yc: Mittelpunkt; a, b: Halbachsen
-        ellipse_area = np.pi * a * b
+    Args:
+        contour_points: Array of shape (N, 2) containing x,y coordinates.
+
+    Returns:
+        tuple: (center, area, radius, contour) if successful, None if fitting fails.
+            center: (x,y) coordinates of ellipse center.
+            area: Area of fitted ellipse.
+            radius: Effective radius (geometric mean of semi-axes).
+            contour: Array of points along fitted ellipse.
+    """
+    # 1. Input Validation and early exit
+    if not isinstance(contour_points, np.ndarray):
+        logger.error("Input must be a numpy array.")
+        return None
+
+    valid_points = contour_points[~np.isnan(contour_points).any(axis=1)]
+    if len(valid_points) < 5:  # Need at least 5 points for ellipse fitting
+        logger.warning("Not enough valid points for ellipse fitting. Need at least 5.")
+        return None
+
+    try:
+        # 2. Fit the ellipse model
+        ellipse_model = EllipseModel()
+        success = ellipse_model.estimate(valid_points)
+
+        if not success:
+            logger.warning("Ellipse fitting failed to converge.")
+            return None
+
+        # 3. Extract and validate parameters
+        xc, yc, a, b, theta = ellipse_model.params
+
+        if a <= 0 or b <= 0:
+            logger.warning(f"Invalid ellipse axes (a={a}, b={b}).")
+            return None
+
+        if not all(np.isfinite([xc, yc, a, b, theta])):
+            logger.error("Invalid ellipse parameters detected (NaN/inf).")
+            return None
+
+        # 4. Calculate derived values
         center = (xc, yc)
+        ellipse_area = np.pi * a * b
         effective_radius = np.sqrt(a * b)
-        #print(ellipse_model, 'a')
 
-        # Für Rücgabe der kontur
-        t = np.linspace(0, 2 * np.pi, len(contour_points))
-        # Parameterform der Ellipse
+        # 5. Generate a dense, fitted ellipse contour
+        # Use a fixed number of points for consistency, e.g., 100
+        t = np.linspace(0, 2 * np.pi, 100)
         x = xc + a * np.cos(t) * np.cos(theta) - b * np.sin(t) * np.sin(theta)
         y = yc + a * np.cos(t) * np.sin(theta) + b * np.sin(t) * np.cos(theta)
         fitted_contour = np.array(list(zip(x, y)), dtype=np.float32)
 
+        logger.info("Ellipse fitting successful.")
+
         return center, ellipse_area, effective_radius, fitted_contour
+
+    except Exception as e:
+        logger.error(f"Unexpected error during ellipse fitting: {str(e)}")
+        return None
+
+
+def add_fitted_contour(contour_original: np.ndarray, contour_fitted: np.ndarray | None,
+                       x_max: int, y_max: int, x_min: int = 0, y_min: int = 0) -> np.ndarray:
+    """Combine original and fitted contours, using fitted points for border regions.
+
+    Args:
+        contour_original: Original contour points.
+        contour_fitted: Fitted ellipse contour points (or None if fitting failed).
+        x_max, y_max: Maximum x,y coordinates.
+        x_min, y_min: Minimum x,y coordinates (default 0).
+
+    Returns:
+        Combined contour array.
+    """
+    if contour_fitted is None:
+        return contour_original
+
+    # 1. Punkte der Originalkontur filtern, die innerhalb der Grenzen liegen
+    # Diese werden verwendet, wo die originale Kontur zuverlässig ist
+    mask_original = (
+            (contour_original[:, 0] > x_min) & (contour_original[:, 0] < x_max) &
+            (contour_original[:, 1] > y_min) & (contour_original[:, 1] < y_max)
+    )
+    inner_contour = contour_original[mask_original]
+
+    # 2. Bestimme welche Bereiche der gefitteten Kontur verwendet werden sollen
+    # Verwende gefittete Punkte für:
+    # - Bereiche außerhalb der Grenzen (Border-Bereiche)
+    # - Bereiche nahe den Grenzen, wo die originale Kontur unzuverlässig ist
+    
+    # Erweitere die Grenzen leicht für einen sanfteren Übergang
+    transition_margin = 2  # pixels
+    
+    # Punkte der gefitteten Kontur, die die Border-Bereiche abdecken
+    mask_fitted_outer = (
+            (contour_fitted[:, 0] <= x_min + transition_margin) | 
+            (contour_fitted[:, 0] >= x_max - transition_margin) |
+            (contour_fitted[:, 1] <= y_min + transition_margin) | 
+            (contour_fitted[:, 1] >= y_max - transition_margin)
+    )
+    fitted_contour_points = contour_fitted[mask_fitted_outer]
+
+    # 3. Kombiniere innere originale Kontur mit gefitteten Border-Bereichen
+    if len(inner_contour) > 0:
+        combined_points = np.vstack([inner_contour, fitted_contour_points])
     else:
-        print("Das Modell konnte keine Ellipse anpassen.")
+        # Fallback: Wenn keine inneren Punkte, verwende nur gefittete Kontur
+        combined_points = contour_fitted
 
-def add_fitted_contour(contour_original: np.ndarray, contour_fitted: np.ndarray, x_max, y_max, x_min=0, y_min=0):
+    # 4. Sortiere die kombinierten Punkte, um eine geschlossene Kontur zu bilden
+    # Sortierung nach Winkel vom Mittelpunkt aus
+    center = np.mean(combined_points, axis=0)
+    y, x = combined_points[:, 1] - center[1], combined_points[:, 0] - center[0]
+    angles = np.arctan2(y, x)
+    sorted_indices = np.argsort(angles)
 
-
-    # Kombinierte Kontur initialisieren
-    contour_combined = []
-
-    # Variable zur Steuerung, ob wir gerade außerhalb des Randbereichs sind
-    outside = False
-    fitted_bool_array = [False, False, False, False]
-
-    # Schritt 1: Gehe jeden Punkt der Originalkontur durch
-    for i, point in enumerate(contour_original):
-        added_extrapolated = False
-
-        # Fall 1: Punkt liegt rechts außerhalb des Bereichs (x > x_max)
-        if point[0] >= x_max and fitted_bool_array[0] == False:
-            # Füge die extrapolierten Punkte mit x > x_max ein
-            for fit_point in contour_fitted[np.argsort(contour_fitted[:, 1])[::-1]]:
-                if fit_point[0] >= x_max:
-                    contour_combined.append(fit_point)
-                    added_extrapolated = True
-                fitted_bool_array[0] = True
-
-        # Fall 2: Punkt liegt links außerhalb des Bereichs (x < x_min)
-        elif point[0] <= x_min and fitted_bool_array[1] == False:
-            # Füge die extrapolierten Punkte mit x < x_min ein
-            for fit_point in contour_fitted[np.argsort(contour_fitted[:, 1])]:
-                if fit_point[0] <= x_min:
-                    contour_combined.append(fit_point)
-                    added_extrapolated = True
-                fitted_bool_array[1] = True
-
-        # Fall 3: Punkt liegt oberhalb des Bereichs (y < y_min)
-        elif point[1] <= y_min and fitted_bool_array[2] == False:
-            # Füge die extrapolierten Punkte mit y < y_min ein
-            for fit_point in contour_fitted[np.argsort(contour_fitted[:, 0])[::-1]]:
-                if fit_point[1] <= y_min:
-                    contour_combined.append(fit_point)
-                    added_extrapolated = True
-                fitted_bool_array[2] = True
-
-        # Fall 4: Punkt liegt unterhalb des Bereichs (y > y_max)
-        elif point[1] >= y_max and fitted_bool_array[3] == False:
-            # _fitted_points = contour_fitted[contour_fitted[:,0]>y_max]
-            #print(point, fit_point, type(fit_point))
-            # Füge die extrapolierten Punkte mit y > y_max ein
-            for fit_point in contour_fitted[np.argsort(contour_fitted[:, 0])]:
-                if fit_point[1] >= y_max:
-                    #print(point, fit_point, type(fit_point))#, np.array(int(fit_point[0]), int(fit_point[1])))
-                    contour_combined.append(fit_point.astype(int))
-                    added_extrapolated = True
-            fitted_bool_array[3] = True
-
-        # Füge den Originalpunkt hinzu, falls kein extrapolierter Punkt eingefügt wurde
-        if not added_extrapolated:
-            contour_combined.append(point)
-
-    # Konvertiere die Liste in ein Array
-    contour_combined = np.array(contour_combined, dtype=np.float32)
-    return contour_combined
-
-    # Ausgabe der kombinierten Kontur
-    # print("Kombinierte Kontur:", contour_combined)
-    # plt.plot(contour_combined[:, 0], contour_combined[:, 1], color='r')
+    return combined_points[sorted_indices].astype(np.float32)
