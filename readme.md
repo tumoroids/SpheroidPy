@@ -35,17 +35,17 @@ conda activate spheroid
 
 SpheroidPy supports segmentation pipelines that can optionally leverage Detectron2. Since Detectron2 is not available via standard PyPI and provides separate builds for CPU and GPU systems, it must be installed manually. Most users without a dedicated NVIDIA GPU will benefit from the CPU version, which is simpler to install and compatible across operating systems.
 
-##### CPU version (recommended for most users):
+##### Mac OS / Linux:
 
 ```bash
 # Install PyTorch 2.3
-pip install torch==2.3.0 torchvision==0.18.0 --index-url https://download.pytorch.org/whl/cpu
+pip install torch==2.3.0 torchvision==0.18.0
 
 # Install Detectron2 0.6
-pip install detectron2 -f https://dl.fbaipublicfiles.com/detectron2/wheels/cpu/torch2.3/index.html
+pip install 'git+https://github.com/facebookresearch/detectron2.git'
 ```
 
-##### GPU version (if CUDA is available):
+##### GPU/CPU version (if CUDA is available or for Windows OS):
 
 Choose the appropriate wheel for your PyTorch and CUDA version from the  [Detectron2 official installation guide](https://github.com/facebookresearch/detectron2). Follow the provided installation instructions for your platform and CUDA configuration.
 
