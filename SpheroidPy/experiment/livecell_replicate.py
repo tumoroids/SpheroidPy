@@ -566,43 +566,50 @@ class LiveCellReplicate:
         if show_progress:
             print(f"\nSegmentation complete for replicate '{self.name}':")
             print(f"Successfully segmented {total_success}/{total_images} images across {len(all_series_args)} series")
-    
-    def compare(self, condition: str, metric: str = 'radius', plot: bool = True) -> pd.DataFrame:
+
+    def compare(self, condition: str, metric: str = 'radius', plot: bool = True,
+                timepoint: int | str | None = None) -> pd.DataFrame:
         """
         Compare collections across a specific condition, grouping by other conditions.
-        
+
         For the specified condition, finds all collections that differ only in that condition
         but are identical in all other conditions. Each such group becomes a column in the
         resulting DataFrame, with rows representing the values of the specified condition.
-        
+
         Args:
             condition: Name of the condition to vary (e.g., 'concentration', 'temperature')
             metric: Metric to calculate (default: 'radius')
             plot: Whether to plot the results (default: True)
-            
+            timepoint: Optional specific timepoint to calculate metrics for.
+                - If int: Timepoint in hours (relative time)
+                - If str: Timepoint as datetime string (e.g., '2025-03-27 20:00:00')
+                - If None: Average across all timepoints (default)
+
         Returns:
             DataFrame with:
                 - Index: Values of the specified condition
                 - Columns: One per group of collections that differ only in other conditions
-                - Values: Metric values (mean across technical replicates within each collection)
+                - Values: Metric values (mean ± std across technical replicates within each collection)
+                - If timepoint is specified, returns mean and std for that timepoint
+                - If timepoint is None, returns mean across all timepoints
         """
         import matplotlib.pyplot as plt
-        
+
         if not self.data_has_been_loaded:
             print("No data loaded for this replicate. Call load_images() first.")
             return pd.DataFrame()
-        
+
         # Get all collections
         collections = self.get_collections()
-        
+
         if not collections:
             print("No collections found. Ensure platemap is configured and images are loaded.")
             return pd.DataFrame()
-        
+
         # Parse condition tuples and extract condition values
         # Condition tuples have format: ((name, value),) or ((name1, value1), (name2, value2), ...)
         condition_data = {}  # {condition_tuple: (condition_dict, collection)}
-        
+
         for cond_tuple, collection in collections.items():
             # Convert condition tuple to dictionary
             cond_dict = {}
@@ -611,54 +618,54 @@ class LiveCellReplicate:
                     if isinstance(item, tuple) and len(item) == 2:
                         name, value = item
                         cond_dict[name] = value
-            
+
             condition_data[cond_tuple] = (cond_dict, collection)
-        
+
         # Check if the specified condition exists
         all_condition_names = set()
         for cond_dict, _ in condition_data.values():
             all_condition_names.update(cond_dict.keys())
-        
+
         if condition not in all_condition_names:
             print(f"Condition '{condition}' not found in platemap. Available conditions: {sorted(all_condition_names)}")
             return pd.DataFrame()
-        
+
         # Group collections by their "other conditions" (all except the specified one)
         # Collections in the same group differ only in the specified condition
         groups = {}  # {other_conditions_tuple: {condition_value: collection}}
-        
+
         for cond_tuple, (cond_dict, collection) in condition_data.items():
             # Extract the value of the specified condition
             if condition not in cond_dict:
                 continue
-            
+
             condition_value = cond_dict[condition]
-            
+
             # Create a tuple of other conditions (excluding the specified one)
             other_conditions = tuple(
                 sorted((name, value) for name, value in cond_dict.items() if name != condition)
             )
-            
+
             if other_conditions not in groups:
                 groups[other_conditions] = {}
-            
+
             groups[other_conditions][condition_value] = collection
-        
+
         if not groups:
             print(f"No collections found with condition '{condition}'.")
             return pd.DataFrame()
-        
+
         # Calculate metrics for each collection
         # Get all unique condition values (for consistent index)
         all_condition_values = set()
         for group_dict in groups.values():
             all_condition_values.update(group_dict.keys())
         all_condition_values = sorted(all_condition_values)
-        
+
         # Build DataFrame
         result_data = {}
         group_labels = []
-        
+
         for other_conditions, group_dict in groups.items():
             # Create label for this group (other conditions)
             if other_conditions:
@@ -666,110 +673,234 @@ class LiveCellReplicate:
                 group_label = ", ".join(label_parts)
             else:
                 group_label = "default"
-            
+
             group_labels.append(group_label)
-            
+
             # Calculate metric for each collection in this group
-            metric_values = []
+            metric_values_mean = []
+            metric_values_std = []
             for cond_value in all_condition_values:
                 if cond_value in group_dict:
                     collection = group_dict[cond_value]
                     # Calculate metric with mean=True to average technical replicates
                     metric_df = collection.metric(name=metric, mean=True, plot=False)
-                    
-                    # Extract mean values (metric_df has MultiIndex columns with (collection_name, 'mean'))
+
+                    # Extract mean and std values (metric_df has MultiIndex columns with (collection_name, 'mean') and (collection_name, 'std'))
                     if not metric_df.empty:
-                        # Get the mean column (first column if MultiIndex, or the column itself)
+                        # Get the mean and std columns
                         if isinstance(metric_df.columns, pd.MultiIndex):
-                            mean_col = metric_df.columns[0]  # (collection_name, 'mean')
-                            mean_values = metric_df[mean_col].values
+                            # Find mean and std columns
+                            mean_col = None
+                            std_col = None
+                            for col in metric_df.columns:
+                                if col[1] == 'mean':
+                                    mean_col = col
+                                elif col[1] == 'std':
+                                    std_col = col
+
+                            if mean_col:
+                                mean_values = metric_df[mean_col].values
+                            else:
+                                mean_values = metric_df.mean(axis=1).values
+
+                            if std_col:
+                                std_values = metric_df[std_col].values
+                            else:
+                                std_values = np.zeros_like(mean_values)
                         else:
                             # Single column - take mean across columns if multiple
                             mean_values = metric_df.mean(axis=1).values
-                        
+                            std_values = np.zeros_like(mean_values)
+
                         # Store as Series with timepoints as index
-                        metric_series = pd.Series(mean_values, index=metric_df.index)
-                        metric_values.append(metric_series)
+                        mean_series = pd.Series(mean_values, index=metric_df.index)
+                        std_series = pd.Series(std_values, index=metric_df.index)
+                        metric_values_mean.append(mean_series)
+                        metric_values_std.append(std_series)
                     else:
-                        metric_values.append(pd.Series(dtype=float))
+                        metric_values_mean.append(pd.Series(dtype=float))
+                        metric_values_std.append(pd.Series(dtype=float))
                 else:
-                    metric_values.append(pd.Series(dtype=float))
-            
+                    metric_values_mean.append(pd.Series(dtype=float))
+                    metric_values_std.append(pd.Series(dtype=float))
+
             # Combine all series for this group
             # Use the union of all timepoints as index
             all_timepoints = set()
-            for series in metric_values:
+            for series in metric_values_mean:
                 if not series.empty:
                     all_timepoints.update(series.index)
-            
+
             if all_timepoints:
                 combined_index = sorted(all_timepoints)
-                combined_data = {}
+                combined_data_mean = {}
+                combined_data_std = {}
                 for idx, cond_value in enumerate(all_condition_values):
-                    series = metric_values[idx]
-                    if not series.empty:
+                    mean_series = metric_values_mean[idx]
+                    std_series = metric_values_std[idx]
+                    if not mean_series.empty:
                         # Reindex to include all timepoints, interpolate missing values
-                        reindexed = series.reindex(combined_index).interpolate(method='linear', limit_direction='both')
-                        combined_data[cond_value] = reindexed
+                        reindexed_mean = mean_series.reindex(combined_index).interpolate(method='linear',
+                                                                                         limit_direction='both')
+                        reindexed_std = std_series.reindex(combined_index).interpolate(method='linear',
+                                                                                       limit_direction='both')
+                        combined_data_mean[cond_value] = reindexed_mean
+                        combined_data_std[cond_value] = reindexed_std
                     else:
-                        combined_data[cond_value] = pd.Series(index=combined_index, dtype=float)
-                
-                # Create DataFrame for this group: rows=timepoints, columns=condition values
-                group_df = pd.DataFrame(combined_data, index=combined_index)
-                result_data[group_label] = group_df
+                        combined_data_mean[cond_value] = pd.Series(index=combined_index, dtype=float)
+                        combined_data_std[cond_value] = pd.Series(index=combined_index, dtype=float)
+
+                # Create DataFrames for this group: rows=timepoints, columns=condition values
+                group_df_mean = pd.DataFrame(combined_data_mean, index=combined_index)
+                group_df_std = pd.DataFrame(combined_data_std, index=combined_index)
+                result_data[group_label] = {'mean': group_df_mean, 'std': group_df_std}
             else:
                 # No data for this group
-                result_data[group_label] = pd.DataFrame()
-        
+                result_data[group_label] = {'mean': pd.DataFrame(), 'std': pd.DataFrame()}
+
         # Combine all groups into a single DataFrame
         # Structure: MultiIndex columns (group_label, condition_value), rows=timepoints
         if not result_data:
             print("No metric data could be calculated.")
             return pd.DataFrame()
-        
+
+        # Handle timepoint selection
+        target_timepoint = None
+        if timepoint is not None:
+            # Convert timepoint to appropriate format
+            if isinstance(timepoint, int):
+                # Timepoint in hours (relative time)
+                target_timepoint = timepoint
+            elif isinstance(timepoint, str):
+                # Timepoint as datetime string
+                try:
+                    target_timepoint = datetime.strptime(timepoint, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    try:
+                        target_timepoint = datetime.fromisoformat(timepoint)
+                    except ValueError:
+                        print(
+                            f"Could not parse timepoint '{timepoint}'. Expected format: 'YYYY-MM-DD HH:MM:SS' or ISO format.")
+                        return pd.DataFrame()
+
         # For plotting and simpler output, create a DataFrame with condition values as index
         # and groups as columns, where each cell contains the metric value at a specific timepoint
-        # We'll use the last timepoint or create a summary
-        
-        # Alternative: Create a wide format with condition values as index
-        # For each group, we need to decide on a timepoint representation
-        # Let's create a summary DataFrame with mean metric across timepoints for each condition value
-        
-        # Actually, let's create a DataFrame where:
-        # - Index: condition values
-        # - Columns: groups
-        # - Values: mean metric across all timepoints (or we could use a specific timepoint)
-        
-        summary_data = {}
-        for group_label, group_df in result_data.items():
-            if not group_df.empty:
-                # Calculate mean across all timepoints for each condition value
-                summary_data[group_label] = group_df.mean(axis=0)
-        
-        if not summary_data:
+        summary_data_mean = {}
+        summary_data_std = {}
+
+        for group_label, group_data in result_data.items():
+            group_df_mean = group_data['mean']
+            group_df_std = group_data['std']
+
+            if not group_df_mean.empty:
+                if target_timepoint is not None:
+                    # Find the closest timepoint
+                    if isinstance(target_timepoint, int):
+                        # Convert hours to timepoint index (assuming index is in hours)
+                        # Find closest timepoint in hours
+                        closest_idx = None
+                        min_diff = float('inf')
+                        for idx in group_df_mean.index:
+                            if isinstance(idx, (int, float)):
+                                diff = abs(idx - target_timepoint)
+                            else:
+                                # Try to convert to hours
+                                try:
+                                    if isinstance(idx, str):
+                                        # Try to parse as datetime and convert to hours
+                                        dt = datetime.strptime(idx, '%Y-%m-%d %H:%M:%S')
+                                        # Calculate hours from first timepoint
+                                        if self.relative_time_array and self.time_points_array:
+                                            first_time = datetime.strptime(self.time_points_array[0],
+                                                                           '%Y-%m-%d %H:%M:%S')
+                                            hours = (dt - first_time).total_seconds() / 3600
+                                            diff = abs(hours - target_timepoint)
+                                        else:
+                                            continue
+                                    else:
+                                        continue
+                                except:
+                                    continue
+
+                            if diff < min_diff:
+                                min_diff = diff
+                                closest_idx = idx
+
+                        if closest_idx is not None:
+                            summary_data_mean[group_label] = group_df_mean.loc[closest_idx]
+                            summary_data_std[group_label] = group_df_std.loc[closest_idx]
+                    else:
+                        # datetime object - find closest timepoint
+                        closest_idx = None
+                        min_diff = float('inf')
+                        for idx in group_df_mean.index:
+                            try:
+                                if isinstance(idx, str):
+                                    dt = datetime.strptime(idx, '%Y-%m-%d %H:%M:%S')
+                                elif isinstance(idx, datetime):
+                                    dt = idx
+                                else:
+                                    continue
+
+                                diff = abs((dt - target_timepoint).total_seconds())
+                                if diff < min_diff:
+                                    min_diff = diff
+                                    closest_idx = idx
+                            except:
+                                continue
+
+                        if closest_idx is not None:
+                            summary_data_mean[group_label] = group_df_mean.loc[closest_idx]
+                            summary_data_std[group_label] = group_df_std.loc[closest_idx]
+                else:
+                    # Calculate mean across all timepoints for each condition value
+                    summary_data_mean[group_label] = group_df_mean.mean(axis=0)
+                    # For std across timepoints, we calculate the std of means
+                    summary_data_std[group_label] = group_df_std.mean(axis=0)
+
+        if not summary_data_mean:
             print("No summary data could be calculated.")
             return pd.DataFrame()
-        
-        result_df = pd.DataFrame(summary_data)
-        result_df.index.name = condition
-        
+
+        result_df_mean = pd.DataFrame(summary_data_mean)
+        result_df_std = pd.DataFrame(summary_data_std)
+        result_df_mean.index.name = condition
+        result_df_std.index.name = condition
+
         # Plot if requested
-        if plot and not result_df.empty:
+        if plot and not result_df_mean.empty:
             plt.figure(figsize=(10, 6))
-            
-            for col in result_df.columns:
-                plt.plot(result_df.index, result_df[col], 'o-', label=col, linewidth=2, markersize=8)
-            
+
+            for col in result_df_mean.columns:
+                mean_values = result_df_mean[col]
+                std_values = result_df_std[col]
+
+                # Plot with error bars
+                plt.errorbar(
+                    result_df_mean.index,
+                    mean_values,
+                    yerr=std_values,
+                    fmt='o-',
+                    label=col,
+                    linewidth=2,
+                    markersize=8,
+                    capsize=5,
+                    capthick=2
+                )
+
+            timepoint_str = f" at {timepoint}" if timepoint is not None else " (mean across timepoints)"
             plt.xlabel(condition)
             plt.ylabel(metric)
-            plt.title(f'{metric} vs {condition}')
+            plt.title(f'{metric} vs {condition}{timepoint_str} (mean ± std)')
             plt.grid(True, alpha=0.3)
             plt.legend()
             plt.tight_layout()
             plt.show()
-        
-        return result_df
-    
+
+        # Return DataFrame with mean values (std can be accessed via result_df_std if needed)
+        # For convenience, we could return a MultiIndex DataFrame, but for now return mean
+        return result_df_mean
+
     @classmethod
     def from_file(cls, name: str, replicate_index: int, result: "Result", 
                   replicate_group: h5py.Group, hdf5_path: str) -> "LiveCellReplicate":
