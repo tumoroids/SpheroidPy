@@ -15,6 +15,8 @@ import ipywidgets as widgets
 from IPython.display import display
 import cv2
 
+from SpheroidPy.utils.color_palettes import CARTO_SEQUENTIAL
+
 logger = logging.getLogger("SpheroidPy.spheroid_collection")
 
 if TYPE_CHECKING:
@@ -40,7 +42,8 @@ class SpheroidCollection:
     """
 
     def __init__(self, name: str, spheroid_list: list[SpheroidSeries] | None = None, 
-                 result: Result | None = None, hdf5_path: str | None = None):
+                 result: Result | None = None, hdf5_path: str | None = None,
+                 color: str | None = None):
         """
         Initialize a SpheroidCollection.
 
@@ -54,15 +57,20 @@ class SpheroidCollection:
             Reference to the Result object this collection belongs to.
         hdf5_path : str, optional
             Path to an HDF5 file for storing collection data.
+        color : str, optional
+            Color palette name from CARTO_SEQUENTIAL. If None, will be assigned
+            automatically when added to a Result.
 
         Notes
         -----
         - If `spheroid_list` is provided, the spheroids are added using `add_spheroids`.
         - `ignored_spheroids` is initialized as an empty set.
+        - `color` can be a palette name (e.g., "Burgundy", "Green") or None.
         """
         self.name = name
         self.hdf5_path = hdf5_path
         self._result = result
+        self.color = color  # Palette name or None
         
         self.spheroid_series = []
         self.ignored_spheroids = set()
@@ -79,8 +87,27 @@ class SpheroidCollection:
         if not spheroid_list:
             print(f"Warning: Empty spheroid list for condition '{self.name}'")
             return
-            
-        self.spheroid_series.extend(spheroid_list)
+        
+        # Check for duplicates by name to avoid adding the same series multiple times
+        existing_names = {s.name for s in self.spheroid_series}
+        new_series = [s for s in spheroid_list if s.name not in existing_names]
+        
+        if new_series:
+            self.spheroid_series.extend(new_series)
+        elif len([s for s in spheroid_list if s.name in existing_names]) > 0:
+            # Some series were duplicates, but we silently skip them
+            pass
+    
+    def add_spheroid(self, spheroid_series: SpheroidSeries):
+        """Add spheroid series to this collection.
+        
+        Args:
+            spheroid_series: SpheroidSeries to add
+        """
+        # Check for duplicates by name to avoid adding the same series multiple times
+        existing_names = {s.name for s in self.spheroid_series}
+        if spheroid_series.name not in existing_names:
+            self.spheroid_series.append(spheroid_series)
 
     def get_spheroids(self, time_period: str | None = None) -> list[SpheroidSeries]:
         """Get list of active spheroids, optionally filtered by time period.
@@ -276,6 +303,17 @@ class SpheroidCollection:
             plt.figure(figsize=(10, 6))
             x = np.array(result_df.index) / 24  # Convert to days
             
+            # Get color for this collection
+            plot_color = None
+            if self.color and self.color in CARTO_SEQUENTIAL:
+                palette = CARTO_SEQUENTIAL[self.color]
+                # Use darkest color (first) when mean=True, otherwise use lighter colors for individual series
+                if mean:
+                    plot_color = palette[0]  # Darkest color
+                else:
+                    # Use a mid-range color for individual series (index 3-4)
+                    plot_color = palette[min(4, len(palette) - 1)]
+            
             if mean:
                 condition = self.name
                 mean_array = result_df[(condition, 'mean')]
@@ -291,19 +329,43 @@ class SpheroidCollection:
                     mean_plot = mean_array
                     std_plot = std_array
                 
+                fill_color = plot_color if plot_color else 'gray'
+                line_color = plot_color if plot_color else 'black'
+                
                 plt.fill_between(x_plot, 
                                mean_plot - std_plot,
                                mean_plot + std_plot,
-                               alpha=0.3)
-                plt.plot(x_plot, mean_plot, 'o-', label=condition)
+                               alpha=0.3,
+                               color=fill_color)
+                plt.plot(x_plot, mean_plot, 'o-', label=condition, color=line_color)
             else:
-                for col in result_df.columns:
+                # Plot individual series with colors from the palette
+                if self.color and self.color in CARTO_SEQUENTIAL:
+                    palette = CARTO_SEQUENTIAL[self.color]
+                    num_colors = len(palette)
+                else:
+                    palette = None
+                    num_colors = 0
+                
+                for idx, col in enumerate(result_df.columns):
                     y = result_df[col]
+                    # Use color from palette if available, cycling through
+                    if palette:
+                        series_color = palette[idx % num_colors]
+                    else:
+                        series_color = None
+                    
                     if skip_nan:
                         valid_mask = ~np.isnan(y)
-                        plt.plot(x[valid_mask], y[valid_mask], 'o-', label=col, alpha=0.7)
+                        if series_color:
+                            plt.plot(x[valid_mask], y[valid_mask], 'o-', label=col, alpha=0.7, color=series_color)
+                        else:
+                            plt.plot(x[valid_mask], y[valid_mask], 'o-', label=col, alpha=0.7)
                     else:
-                        plt.plot(x, y, 'o-', label=col, alpha=0.7)
+                        if series_color:
+                            plt.plot(x, y, 'o-', label=col, alpha=0.7, color=series_color)
+                        else:
+                            plt.plot(x, y, 'o-', label=col, alpha=0.7)
             
             plt.grid(True, alpha=0.3)
             plt.xlabel('Time [d]')
@@ -323,11 +385,121 @@ class SpheroidCollection:
             
         return result_df
 
+    def series_metric_table(
+        self,
+        metric_name: str,
+        value_keys: list[str] | None = None,
+        time_period: str | None = None,
+    ) -> pd.DataFrame:
+        """Collect stored analysis metrics for each spheroid series.
+
+        Args:
+            metric_name: Name passed to ``SpheroidSeries.store_analysis_metrics``.
+            value_keys: Optional subset of metric keys to include.
+            time_period: Optional time-period label to filter metrics by. When
+                omitted the returned DataFrame contains a multi-index of
+                ``(series, time_period)`` rows so different windows can be
+                compared side-by-side.
+
+        Returns:
+            DataFrame indexed by series (and optionally time period) with one
+            column per requested metric value.
+        """
+        rows: list[dict] = []
+        selected_keys = list(value_keys) if value_keys is not None else None
+
+        def _display_period_label(label: str | None) -> str:
+            return label if label is not None else "full_series"
+
+        for spheroid in self.get_spheroids():
+            if time_period is not None:
+                metrics = spheroid.get_analysis_metrics(metric_name, time_period=time_period)
+                period_entries = [(time_period, metrics)] if metrics else []
+            else:
+                metrics_map = spheroid.get_analysis_metrics(metric_name)
+                period_entries = metrics_map.items() if metrics_map else []
+
+            for period_label, metrics in period_entries:
+                if not metrics:
+                    continue
+                if selected_keys is None:
+                    selected_keys = list(metrics.keys())
+                row = {'series': spheroid.name}
+                if time_period is None:
+                    row['time_period'] = _display_period_label(period_label)
+                for key in selected_keys or []:
+                    row[key] = metrics.get(key)
+                rows.append(row)
+
+        if not rows:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(rows)
+        index_cols = ['series'] if time_period is not None else ['series', 'time_period']
+        df = df.set_index(index_cols)
+        metric_cols = selected_keys or []
+        return df[metric_cols]
+
+    def analysis_metric(
+        self,
+        metric_name: str,
+        value_keys: list[str] | None = None,
+        time_period: str | None = None,
+    ) -> pd.DataFrame:
+        """
+        Calculate per-series values as well as mean and standard error for a stored analysis metric.
+
+        Parameters
+        ----------
+        metric_name : str
+            Name that was passed to ``SpheroidSeries.store_analysis_metrics`` (e.g. ``"necrotic_radius"``).
+        value_keys : list[str], optional
+            Optional subset of metric keys to include. When omitted all available keys are used.
+        time_period : str, optional
+            Restrict the aggregation to metrics that were recorded for a specific time period. If ``None``,
+            values across all stored time periods are used.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Table containing one row per spheroid series (and time period, if multiple exist) followed by
+            two summary rows labelled ``summary_mean`` and ``summary_sem``. The latter rows hold the
+            column-wise mean and standard error of the mean, respectively.
+        """
+        table = self.series_metric_table(
+            metric_name,
+            value_keys=value_keys,
+            time_period=time_period,
+        )
+        if table.empty:
+            return table
+
+        means = table.mean(axis=0, skipna=True)
+        sem = table.sem(axis=0, skipna=True)
+
+        if isinstance(table.index, pd.MultiIndex):
+            level_names = list(table.index.names)
+            summary_tuples = [
+                tuple(["mean"] + [""] * (len(level_names) - 1)),
+                tuple(["standard error of mean"] + [""] * (len(level_names) - 1)),
+            ]
+            summary_index = pd.MultiIndex.from_tuples(summary_tuples, names=level_names)
+        else:
+            summary_index = pd.Index(
+                ["mean", "standard error of mean"],
+                name=table.index.name,
+            )
+
+        summary_df = pd.DataFrame([means, sem], index=summary_index)
+        combined = pd.concat([table, summary_df])
+        return combined
+
     def segmentation(self,
                      methods: list | tuple = [('thresholding', 'fluorescence_green'), ('ai', 'brightfield')],
                      reconstruct_border: bool = True,
                      border_margin: int = 10,
-                     **kwargs) -> None:
+                     show_progress: bool = True,
+                     **kwargs) -> tuple[int, int]:
         """
         Segment all SpheroidSeries in this collection using multiprocessing.
 
@@ -336,25 +508,31 @@ class SpheroidCollection:
                 [('thresholding','fluorescence_green'), ('ai','brightfield')]
             reconstruct_border: Whether to reconstruct border if contour touches image border
             border_margin: Margin (px) for border detection
+            show_progress: Whether to show progress bar (default: True). Set to False when called from higher-level methods.
             **kwargs: Method-specific parameters:
                 For thresholding:
                     threshold: Intensity threshold multiplier (default: 1.35)
                     use_yen: Whether to use Yen's method (default: True)
                 For AI:
                     confidence: Detection confidence threshold (default: 0.65)
+        
+        Returns:
+            Tuple of (total_success, total_images) for aggregation at higher levels.
         """
         import multiprocessing as mp
         from tqdm import tqdm
         
         if not self.spheroid_series:
-            print("No spheroid series in collection to segment.")
-            return
+            if show_progress:
+                print("No spheroid series in collection to segment.")
+            return (0, 0)
 
         # Get active spheroid series
         active_series = self.get_spheroids()
         if not active_series:
-            print("No active spheroid series in collection to segment.")
-            return
+            if show_progress:
+                print("No active spheroid series in collection to segment.")
+            return (0, 0)
 
         # Prepare arguments for parallel processing
         series_args = []
@@ -376,18 +554,22 @@ class SpheroidCollection:
         # Process series in parallel
         num_cores = mp.cpu_count()
         with mp.Pool(processes=num_cores) as pool:
-            results = list(tqdm(
-                pool.imap(self._process_segmentation_series, series_args),
-                total=len(series_args),
-                desc="Processing segmentation"
-            ))
+            if show_progress:
+                results = list(tqdm(
+                    pool.imap(self._process_segmentation_series, series_args),
+                    total=len(series_args),
+                    desc=f"Collection '{self.name}'"
+                ))
+            else:
+                results = list(pool.imap(self._process_segmentation_series, series_args))
 
         # Summarize results
         total_success = sum(success for _, success, _, _ in results)
         total_images = sum(total for _, _, total, _ in results)
 
-        print(f"\nSegmentation complete for collection '{self.name}':")
-        print(f"Successfully segmented {total_success}/{total_images} images across {len(active_series)} series")
+        if show_progress:
+            print(f"\nSegmentation complete for collection '{self.name}':")
+            print(f"Successfully segmented {total_success}/{total_images} images across {len(active_series)} series")
 
         # Update SpheroidImage instances with segmentation results
         for series_name, _, _, contour_data in results:
@@ -408,7 +590,11 @@ class SpheroidCollection:
                         if 'contour' in spheroid_image_group:
                             del spheroid_image_group['contour']
                         spheroid_image_group.create_dataset('contour', data=data['contour'])
-                        spheroid_image_group.attrs['touches_border'] = data['touches_border']
+                        # Store as int for PyTables compatibility
+                        touches_border_val = data['touches_border'] if data.get('touches_border') is not None else False
+                        spheroid_image_group.attrs['touches_border'] = 1 if touches_border_val else 0
+        
+        return (total_success, total_images)
 
     @staticmethod
     def _process_segmentation_series(args):
@@ -437,6 +623,7 @@ class SpheroidCollection:
                 continue
                 
             spheroid_image = spheroid_images[timepoint]
+            total_count += 1  # Count all images we attempt to segment
             try:
                 spheroid_image.segmentation(
                     methods=methods,
@@ -451,9 +638,9 @@ class SpheroidCollection:
                         'touches_border': spheroid_image.contour_touches_border,
                         'hdf5_key': spheroid_image.hdf5_key
                     }
-                total_count += 1
             except Exception as e:
                 print(f"Error processing {series_name} at {timepoint}: {str(e)}")
+                # total_count already incremented, success_count not incremented
                 continue
 
         return series_name, success_count, total_count, contour_data
@@ -656,6 +843,9 @@ class SpheroidCollection:
                 ch = 'brightfield'
             try:
                 sph_img.segmentation_manual(ch)
+                # Save contour to HDF5
+                if hasattr(sph_img, '_save_contour_to_hdf5'):
+                    sph_img._save_contour_to_hdf5()
                 update_image()
             except Exception as e:
                 print(f"Manual segmentation failed: {e}")
@@ -677,6 +867,9 @@ class SpheroidCollection:
                 else:
                     sph_img.contour = res
                     # contour_touches_border was set inside segmentation_thresholding
+                # Save contour to HDF5
+                if hasattr(sph_img, '_save_contour_to_hdf5'):
+                    sph_img._save_contour_to_hdf5()
                 update_image()
             except Exception as e:
                 print(f"Thresholding segmentation failed: {e}")
@@ -696,6 +889,9 @@ class SpheroidCollection:
                     sph_img.contour, sph_img.contour_touches_border = res
                 else:
                     sph_img.contour = res
+                # Save contour to HDF5
+                if hasattr(sph_img, '_save_contour_to_hdf5'):
+                    sph_img._save_contour_to_hdf5()
                 update_image()
             except Exception as e:
                 print(f"AI segmentation failed: {e}")
@@ -709,6 +905,9 @@ class SpheroidCollection:
             sph_img = current_series.spheroid_image_dict[timepoints[idx]]
             sph_img.contour = None
             sph_img.contour_touches_border = False
+            # Save deletion to HDF5 (remove contour from file)
+            if hasattr(sph_img, '_save_contour_to_hdf5'):
+                sph_img._save_contour_to_hdf5()  # This will handle None contour correctly
             update_image()
 
         manual_btn.on_click(manual_segmentation)

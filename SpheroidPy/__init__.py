@@ -1,5 +1,11 @@
-from SpheroidPy.spheroid import *
-from SpheroidPy.experiment import *
+"""SpheroidPy - Python Package for the Analysis of Spheroid Imaging Data."""
+
+__version__ = "0.1.0"
+
+from .spheroid import *
+from .experiment import *
+
+__all__ = ['spheroid', 'experiment']
 
 import logging
 import warnings

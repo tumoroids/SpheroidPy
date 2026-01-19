@@ -13,15 +13,14 @@ import pandas as pd
 import ipywidgets as widgets
 from IPython.display import display, clear_output
 import openpyxl, h5py
-from datetime import datetime  # Change this import
+from datetime import datetime
 
 from pathlib import Path
 import random, re
 import pandas as pd
 
-from SpheroidPy.experiment.base import Base
 if TYPE_CHECKING:
-    from SpheroidPy.experiment.experiment import Experiment
+    from SpheroidPy.experiment.livecell_replicate import LiveCellReplicate
     from SpheroidPy.experiment.result import Result
 from SpheroidPy.utils.utils import format_thousand_annotation, find_replicates
 from SpheroidPy.utils.file_management import direct_subgroups
@@ -40,44 +39,88 @@ class Platemap:
     Manages information about cell lines and compounds in each well position.
     Provides functionality for data entry, visualization and analysis of plate layouts.
     
+    This is an optional feature for Results that use plate-based well layouts.
+    
     Attributes:
-        result: Associated Result object
+        replicate: Associated LiveCellReplicate object (or Result for backward compatibility)
         cell_lines: Dictionary mapping cell line names to their plate positions
         compounds: Dictionary mapping compound names to their plate positions
         hdf5_key: Key for accessing platemap data in HDF5 file
     """
 
-    result: Result
+    replicate: "LiveCellReplicate" | "Result"  # Can work with either
 
     # Dicts for the dataframes
     cell_lines: dict
     compounds: dict
 
-    def __init__(self, result: Result) -> None:
+    def __init__(self, replicate: "LiveCellReplicate" | "Result") -> None:
         """Initialize a new Platemap instance.
         
-        Creates a new platemap associated with the given Result object and initializes
+        Creates a new platemap associated with the given Replicate or Result object and initializes
         storage for cell line and compound data.
 
         Args:
-            result (Result): The Result object this platemap belongs to
+            replicate: The LiveCellReplicate or Result object this platemap belongs to
         """
-        self.result = result
+        self.replicate = replicate
         self.cell_lines = {}
         self.compounds = {}
-        self.hdf5_key = f'{result.hdf5_key}/Platemap'
         self._initialize_hdf5_structure()
+
+    @property
+    def hdf5_key(self) -> str:
+        """Get HDF5 key for this platemap."""
+        if hasattr(self.replicate, 'hdf5_key'):
+            return f'{self.replicate.hdf5_key}/Platemap'
+        # Fallback for Result without hdf5_key
+        # If replicate is a LiveCellReplicate, get index from its result
+        # If replicate is a Result, get index directly
+        if hasattr(self.replicate, 'result'):
+            # replicate is LiveCellReplicate - get index from result
+            result = self.replicate.result
+            result_index = getattr(result, '_result_index', 0)
+            result_key = f"Result/{result_index}-{result.name}"
+        elif hasattr(self.replicate, 'name'):
+            # replicate is Result - get index directly
+            result_index = getattr(self.replicate, '_result_index', 0)
+            result_key = f"Result/{result_index}-{self.replicate.name}"
+        else:
+            raise ValueError("Cannot determine HDF5 key for platemap")
+        
+        return f'{result_key}/ReplicateInfo/Platemap'
+
+    @property
+    def hdf5_path(self) -> Path:
+        """Get HDF5 file path."""
+        if hasattr(self.replicate, 'hdf5_path') and self.replicate.hdf5_path:
+            return self.replicate.hdf5_path
+        # Fallback: try to get from result's experiment
+        if hasattr(self.replicate, 'result') and hasattr(self.replicate.result, 'hdf5_path'):
+            return self.replicate.result.hdf5_path
+        if hasattr(self.replicate, 'experiment') and hasattr(self.replicate.experiment, 'hdf5_path'):
+            return self.replicate.experiment.hdf5_path
+        raise ValueError("Cannot determine HDF5 path for platemap")
 
     def _initialize_hdf5_structure(self):
         """Initialize HDF5 storage structure."""
-        with h5py.File(self.hdf5_path, 'a') as hdf_file:
-            element_group = hdf_file[self.hdf5_key]
-            element_group.attrs['date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            for group_name in ['cell_line', 'compound']:
-                element_group.create_group(group_name)
+        try:
+            with h5py.File(self.hdf5_path, 'a') as hdf_file:
+                # Use require_group to create if it doesn't exist
+                element_group = hdf_file.require_group(self.hdf5_key)
+                element_group.attrs['date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                for group_name in ['cell_line', 'compound']:
+                    element_group.require_group(group_name)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("SpheroidPy.experiment.platemap")
+            logger.warning(f"Could not initialize HDF5 structure for platemap: {e}")
 
     def update_plate_data(self, name: str, data_type: str, value_dict: dict | None = None) -> None:
-        """Update plate data for cell lines or compounds."""
+        """Update plate data for cell lines or compounds.
+        
+        Automatically triggers collection update if replicate is associated with a result.
+        """
         if data_type not in ['cell_line', 'compound']:
             raise ValueError("data_type must be 'cell_line' or 'compound'")
             
@@ -93,31 +136,71 @@ class Platemap:
             else:
                 data_dict[name] = self._update_platemap(name, data_type.title(), value_dict)
             self._save_hdf5(data_dict[name], name, data_type)
+            
+            # Trigger collection update if replicate is associated with a result
+            if hasattr(self.replicate, 'result') and hasattr(self.replicate.result, '_update_collections_from_replicates'):
+                self.replicate.result._update_collections_from_replicates()
 
     @classmethod
-    def from_file(cls, result: Result, instance_group: h5py.Group) -> Platemap:
+    def from_file(cls, replicate: "LiveCellReplicate" | "Result", instance_group: h5py.Group, hdf5_path: str) -> "Platemap":
+        """Load a platemap from HDF5 file.
+        
+        Args:
+            replicate: The LiveCellReplicate or Result object this platemap belongs to
+            instance_group: HDF5 group for this platemap
+            hdf5_path: Path to HDF5 file
+            
+        Returns:
+            Platemap instance loaded from HDF5
+        """
         platemap = object.__new__(cls)
 
         # General Properties
         platemap.type_name = 'Platemap'
-        platemap.result = result
+        platemap.replicate = replicate
 
         platemap.cell_lines = {}
         platemap.compounds = {}
 
-        platemap.hdf5_key = f'{result.hdf5_key}/Platemap'
+        # Determine hdf5_key
+        if hasattr(replicate, 'hdf5_key'):
+            base_key = f'{replicate.hdf5_key}/Platemap'
+        else:
+            # Fallback for Result without hdf5_key
+            # If replicate is a LiveCellReplicate, get index from its result
+            # If replicate is a Result, get index directly
+            if hasattr(replicate, 'result'):
+                # replicate is LiveCellReplicate - get index from result
+                result = replicate.result
+                result_index = getattr(result, '_result_index', 0)
+                base_key = f"Result/{result_index}-{result.name}/ReplicateInfo/Platemap"
+            elif hasattr(replicate, 'name'):
+                # replicate is Result - get index directly
+                result_index = getattr(replicate, '_result_index', 0)
+                base_key = f"Result/{result_index}-{replicate.name}/ReplicateInfo/Platemap"
+            else:
+                base_key = str(instance_group.name)
 
         for type, dict_ in zip(['cell_line', 'compound'], [platemap.cell_lines, platemap.compounds]):
-            for name in instance_group[type]:
-                path = Path(result.hdf5_path).absolute()
-                df = pd.read_hdf(str(path), key=f'/{platemap.hdf5_key}/{type}/{name}')
-                dict_[name] = df
+            if type in instance_group:
+                for name in instance_group[type]:
+                    path = Path(hdf5_path).absolute()
+                    platemap_key = f'{base_key}/{type}/{name}'
+                    try:
+                        df = pd.read_hdf(str(path), key=f'/{platemap_key}')
+                        dict_[name] = df
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger("SpheroidPy.experiment.platemap")
+                        logger.warning(f"Could not load {type} '{name}': {e}")
 
-        print(f'Platemap has been loaded!')
+        #print(f'Platemap has been loaded!')
         return platemap
 
     def cell_line(self, name: str | list, value_dict: dict | None = None):
         """Add or update cell line information in the platemap.
+        
+        Automatically triggers collection update if replicate is associated with a result.
         
         Args:
             name: Cell line name or list of names
@@ -131,12 +214,18 @@ class Platemap:
                 self.cell_lines[name] = self._update_platemap(name, 'Cell line', value_dict)
             self._save_hdf5(self.cell_lines[name], name, 'cell_line')
             self.heatmap(name)
+            
+            # Trigger collection update
+            if hasattr(self.replicate, 'result') and hasattr(self.replicate.result, '_update_collections_from_replicates'):
+                self.replicate.result._update_collections_from_replicates()
         elif isinstance(name, list):
             for cell in name:
                 self.cell_line(cell)
 
     def compound(self, name: str | list, value_dict: dict | None = None):
         """Add or update compound information in the platemap.
+        
+        Automatically triggers collection update if replicate is associated with a result.
         
         Args:
             name: Compound name or list of names
@@ -150,6 +239,10 @@ class Platemap:
                 self.compounds[name] = self._update_platemap(name, 'Compound', value_dict)
             self._save_hdf5(self.compounds[name], name, 'compound')
             self.heatmap(name)
+            
+            # Trigger collection update
+            if hasattr(self.replicate, 'result') and hasattr(self.replicate.result, '_update_collections_from_replicates'):
+                self.replicate.result._update_collections_from_replicates()
         elif isinstance(name, list):
             for compound in name:
                 self.compound(compound)
@@ -246,10 +339,6 @@ class Platemap:
         plt.tight_layout()
         plt.show()
 
-    @property
-    def hdf5_path(self) -> str:
-        return self.result.hdf5_path
-
     def find_replicates(self, element_name: str | None = None) -> dict:
         """Find replicate groups based on element values.
         
@@ -296,10 +385,29 @@ class Platemap:
 
     @property
     def col(self):
-        return self.result.col
+        """Get number of columns from experiment layout."""
+        # Try to get from replicate's result's experiment
+        if hasattr(self.replicate, 'result') and hasattr(self.replicate.result, 'experiment'):
+            if hasattr(self.replicate.result.experiment, 'col'):
+                return self.replicate.result.experiment.col
+        # Try to get from replicate's experiment (if replicate is Result)
+        if hasattr(self.replicate, 'experiment') and hasattr(self.replicate.experiment, 'col'):
+            return self.replicate.experiment.col
+        # Default fallback
+        return 12  # Default for 96-well plate
+    
     @property
     def row(self):
-        return self.result.row
+        """Get number of rows from experiment layout."""
+        # Try to get from replicate's result's experiment
+        if hasattr(self.replicate, 'result') and hasattr(self.replicate.result, 'experiment'):
+            if hasattr(self.replicate.result.experiment, 'row'):
+                return self.replicate.result.experiment.row
+        # Try to get from replicate's experiment (if replicate is Result)
+        if hasattr(self.replicate, 'experiment') and hasattr(self.replicate.experiment, 'row'):
+            return self.replicate.experiment.row
+        # Default fallback
+        return 8  # Default for 96-well plate
 
     def _update_platemap(self, name: str, header: str, value_dict: dict | None = None, df: pd.DataFrame | None = None, visualize: bool = True):
         # layout
@@ -402,7 +510,7 @@ class Platemap:
         return edited_df
 
     def _save_hdf5(self, df: pd.DataFrame, df_name: str, group_name: str):
-
+        """Save platemap DataFrame to HDF5."""
         if group_name not in ['cell_line', 'compound']:
             raise Exception('Group name must be "cell_line", "compound"')
 
@@ -427,14 +535,15 @@ class Platemap:
         with h5py.File(self.hdf5_path, 'a') as hdf_file:
             current_group = hdf_file[f'{self.hdf5_key}/{group_name}/{safe_name}']
             current_group.attrs['date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    def _save_all_to_hdf5(self):
+        """Save all platemap data to HDF5."""
+        for name, df in self.cell_lines.items():
+            self._save_hdf5(df, name, 'cell_line')
+        for name, df in self.compounds.items():
+            self._save_hdf5(df, name, 'compound')
 
     # todo
     def _worksheet(self, workbook: Workbook) -> Workbook:
         pass
 
-
-
-if __name__ == '__main__':
-    exp = Experiment('Test', 96, Path('TestExp'))
-    pm = Platemap('Platemap',exp)
-    #print(help(Platemap))

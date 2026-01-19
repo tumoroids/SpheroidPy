@@ -31,7 +31,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-detectron2 = []
+detectron2 = ["detectron2"]
+pytorch = ["torch", "torchvision"]
+all = ["detectron2", "torch", "torchvision"]
 
 [project.urls]
 homepage = "https://github.com/CedHe/SpheroidPy"
@@ -45,6 +47,15 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 
-[tool.setuptools.packages.find]
-where = ["."]
-exclude = ["docs*", "examples*"]
+[tool.setuptools]
+packages = ["SpheroidPy", "SpheroidPy.spheroid", "SpheroidPy.spheroid.models", 
+            "SpheroidPy.experiment", "SpheroidPy.livecell", "SpheroidPy.utils"]
+
+[tool.setuptools.package-data]
+SpheroidPy = ["weights/*.pth", "static/images/*.png"]
+
+# Alternative: auto-discovery (falls explizite Liste Probleme macht)
+# [tool.setuptools.packages.find]
+# where = ["."]
+# include = ["SpheroidPy*"]
+# exclude = ["docs*", "examples*", "*.egg-info*", "SpheroidPy.egg-info*"]

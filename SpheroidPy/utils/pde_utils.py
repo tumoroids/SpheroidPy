@@ -1,6 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from meshpy.triangle import MeshInfo, build
+try:
+    from meshpy.triangle import MeshInfo, build
+except ImportError:
+    print("MeshPy is not installed. Please install it to use the PDE utilities.")
+    MeshInfo = None
+    build = None
+
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
 

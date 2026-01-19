@@ -1,90 +1,103 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
-import h5py
+
 from datetime import datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
 
+import h5py
 
-if TYPE_CHECKING:
-    from SpheroidPy.experiment.experiment import Experiment
+if TYPE_CHECKING:  # pragma: no cover - typing helper only
+    from .experiment import Experiment
 
 
 class Base:
-    """Base class for Experiment, Result, and Analysis classes.
-    
-    Attributes:
-        name: Name of the instance
-        type_name: Type of instance ('Result' or 'Analysis')
-        index: Index in parent container
-        experiment: Parent Experiment instance
-        hdf5_key: HDF5 storage key
-        created_at: When this instance was created
-        modified_at: When this instance was last modified
-        description: Optional description
+    """Lightweight base class for experiment graph elements.
+
+    This class purposely mirrors the structure of the original ``experiment``
+    module but keeps the implementation domain-agnostic so that specialised
+    live-cell imaging classes can inherit from it later on. When no experiment
+    context is supplied, the instance behaves as a standalone node that can
+    still store analysis data in-memory or to a custom HDF5 file.
     """
 
-    name: str
-    type_name: str
-    index: int
-    experiment: Experiment
-    hdf5_key: str
-    created_at: datetime
-    modified_at: datetime
-    description: str | None
+    type_name: str = "Node"
+    _standalone_counters: dict[str, int] = {}
 
-    def __init__(self, name: str, experiment: Experiment, type_name: str | None = None, description: str | None = None) -> None:
-        """Initialize base class.
-        
-        Args:
-            name: Name of the element
-            experiment: Parent Experiment instance
-            type_name: Type of element ('Result' or 'Analysis')
-            description: Optional description
-        """
+    def __init__(
+        self,
+        name: str,
+        experiment: Experiment | None = None,
+        description: str | None = None,
+        hdf5_path: Path | None = None,
+    ) -> None:
         self.name = name
-        self.type_name = type_name
         self.experiment = experiment
         self.description = description
         self.created_at = datetime.now()
         self.modified_at = datetime.now()
-        
-        # Get index and set hdf5_key before adding to experiment
-        self.index = len(getattr(experiment, f"{'results' if type_name=='Result' else 'analyses'}_dict"))
-        self.hdf5_key = f'{type_name}/{self.index}-{name}'
-        
-        # Add element to experiment
-        experiment._add_element(self)
+        self._hdf5_override = Path(hdf5_path) if hdf5_path is not None else None
 
-    def save_metadata_to_hdf5(self):
-        """Save metadata to HDF5 file."""
-        with h5py.File(self.hdf5_path, 'a') as hdf_file:
-            instance_group = hdf_file[self.hdf5_key]
-            instance_group.attrs['created_at'] = self.created_at.isoformat()
-            instance_group.attrs['modified_at'] = self.modified_at.isoformat()
+        if experiment is not None:
+            self.index = experiment._register_node(self)
+            self.hdf5_key = f"{self.type_name}/{self.index}-{self.name}"
+        else:
+            self.index = self._next_standalone_index()
+            self.hdf5_key = f"{self.type_name}/standalone-{self.index}-{self.name}"
+
+    # ------------------------------------------------------------------ #
+    # Convenience properties
+    # ------------------------------------------------------------------ #
+    @property
+    def hdf5_path(self) -> Path:
+        if self.experiment is not None:
+            return self.experiment.hdf5_path
+        if self._hdf5_override is not None:
+            return self._hdf5_override
+        raise RuntimeError(
+            f"{self.__class__.__name__} is not attached to an Experiment and no "
+            "custom hdf5_path was provided."
+        )
+
+    # ------------------------------------------------------------------ #
+    # Persistence helpers
+    # ------------------------------------------------------------------ #
+    def save_metadata(self) -> None:
+        """Persist basic metadata for the node into the HDF5 file."""
+        if not self._can_persist():
+            return
+        with h5py.File(self.hdf5_path, "a") as hdf_file:
+            group = hdf_file.require_group(self.hdf5_key)
+            group.attrs["name"] = self.name
+            group.attrs["created_at"] = self.created_at.isoformat()
+            group.attrs["modified_at"] = self.modified_at.isoformat()
             if self.description:
-                instance_group.attrs['description'] = self.description
+                group.attrs["description"] = self.description
 
-    def load_metadata_from_hdf5(self, instance_group: h5py.Group):
-        """Load metadata from HDF5 group."""
-        if 'created_at' in instance_group.attrs:
-            self.created_at = datetime.fromisoformat(instance_group.attrs['created_at'])
-        if 'modified_at' in instance_group.attrs:
-            self.modified_at = datetime.fromisoformat(instance_group.attrs['modified_at'])
-        if 'description' in instance_group.attrs:
-            self.description = instance_group.attrs['description']
+    def load_metadata(self, group: h5py.Group) -> None:
+        """Populate metadata fields from an HDF5 group."""
+        self.name = group.attrs.get("name", self.name)
+        if "created_at" in group.attrs:
+            self.created_at = datetime.fromisoformat(group.attrs["created_at"])
+        if "modified_at" in group.attrs:
+            self.modified_at = datetime.fromisoformat(group.attrs["modified_at"])
+        if "description" in group.attrs:
+            self.description = group.attrs["description"]
 
-    def update_description(self, description: str):
-        """Update instance description and modified time."""
-        self.description = description
+    def touch(self) -> None:
+        """Update ``modified_at`` and persist the change."""
         self.modified_at = datetime.now()
-        self.save_metadata_to_hdf5()
+        self.save_metadata()
 
-    ''' Properties from the associated Experiment Class '''
-    @property
-    def hdf5_path(self) -> str:
-        return self.experiment.hdf5_path
-    @property
-    def col(self):
-        return self.experiment.col
-    @property
-    def row(self):
-        return self.experiment.row
+    # ------------------------------------------------------------------ #
+    # Internal helpers
+    # ------------------------------------------------------------------ #
+    def _can_persist(self) -> bool:
+        return self.experiment is not None or self._hdf5_override is not None
+
+    @classmethod
+    def _next_standalone_index(cls) -> int:
+        counter = cls._standalone_counters.setdefault(cls.__name__, 0)
+        cls._standalone_counters[cls.__name__] += 1
+        return counter
+
+

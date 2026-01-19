@@ -1,5 +1,7 @@
 from datetime import datetime
 import logging
+from pathlib import Path
+import os
 
 import cv2
 import matplotlib.pyplot as plt
@@ -12,40 +14,22 @@ import h5py
 import pandas as pd
 import base64
 from typing import Optional
+from matplotlib.legend_handler import HandlerTuple
+from matplotlib.lines import Line2D
 
 from SpheroidPy.spheroid.spheroid_image import SpheroidImage
 from SpheroidPy.utils.time_period import TimePeriod, DatetimeOrRange
 from SpheroidPy.spheroid.models.ward_and_king import WardAndKing
 from SpheroidPy.spheroid.models.greenspan import GreenspanModel
+from SpheroidPy.utils.file_management import collect_data
+from SpheroidPy.utils.necrotic_models import (
+    get_fit_model,
+    get_default_initial_guess,
+    get_default_bounds
+)
+import multiprocessing as mp
 
 logger = logging.getLogger("SpheroidPy.spheroid_series")
-
-def necrotic_radius_func(t, t_nec, slope, plateau, a):
-    """
-    Function to fit necrotic radius over time.
-    
-    Args:
-        t: Time array
-        t_nec: Time when necrosis starts
-        slope: Linear growth rate after necrosis starts
-        plateau: Plateau value for exponential term
-        a: Exponential decay rate
-        
-    Returns:
-        Array of necrotic radius values
-    """
-    t = np.array(t, dtype=float)
-    r = np.zeros_like(t, dtype=float)
-
-    mask = t > t_nec
-    dt = t[mask] - t_nec
-
-    # linear + exponential term
-    linear = slope * dt
-    exp_term = plateau * (1 - np.exp(-a * dt))
-
-    r[mask] = linear + exp_term
-    return r
 
 def _process_necrotic_radius_single(args):
     """
@@ -69,9 +53,8 @@ def _process_necrotic_radius_single(args):
     
     try:
         # Recreate SpheroidImage from paths
+        # Brightfield is optional now, but at least one channel must be present
         brightfield_path = image_path_dict.get('brightfield')
-        if brightfield_path is None:
-            return (timepoint, np.nan, np.nan, time_days)
         
         kwargs = {}
         if 'fluorescence_green' in image_path_dict:
@@ -83,7 +66,12 @@ def _process_necrotic_radius_single(args):
         if image_size is not None:
             kwargs['image_size'] = image_size
         
-        spheroid_image = SpheroidImage(brightfield=brightfield_path, **kwargs)
+        # Create SpheroidImage (brightfield can be None if other channels are available)
+        try:
+            spheroid_image = SpheroidImage(brightfield=brightfield_path, **kwargs)
+        except ValueError as e:
+            # If no channels available, return NaN
+            return (timepoint, np.nan, np.nan, time_days)
         
         # Set contour if available
         if contour is not None:
@@ -167,6 +155,8 @@ class SpheroidSeries:
         self.time_periods: dict[str, TimePeriod] = {}
         self._result = None
         self._period_cache: dict[str, dict] = {}  # Cache for get_images_in_period results
+        self.analysis_metrics: dict[str, dict[str, dict[str, float]]] = {}
+        self._DEFAULT_METRIC_PERIOD = "__full_series__"
 
     @property
     def hdf5_path(self) -> str:
@@ -184,17 +174,331 @@ class SpheroidSeries:
         full_key = next(iter(self.spheroid_image_dict.values())).hdf5_key
         return '/'.join(full_key.split('/')[:-1])
 
-    def add_spheroid_image(self, spheroid: SpheroidImage, timepoint: datetime):
+    def add_spheroid_image(self, spheroid: SpheroidImage, timepoint: datetime | str):
         """Add a spheroid image at a specific timepoint.
         
         Args:
             spheroid: SpheroidImage instance to add
-            timepoint: When the image was taken
+            timepoint: When the image was taken (datetime or string in format 'YYYY-MM-DD HH:MM:SS')
         """
         self.spheroid_image_dict[timepoint] = spheroid
-        self.spheroid_image_dict = dict(sorted(self.spheroid_image_dict.items()))
+        # Sort by converting strings to datetime for comparison, but keep original format
+        if all(isinstance(k, str) for k in self.spheroid_image_dict.keys()):
+            # All keys are strings - sort as strings (they should be in sortable format)
+            self.spheroid_image_dict = dict(sorted(self.spheroid_image_dict.items()))
+        elif all(isinstance(k, datetime) for k in self.spheroid_image_dict.keys()):
+            # All keys are datetime - sort as datetime
+            self.spheroid_image_dict = dict(sorted(self.spheroid_image_dict.items()))
+        else:
+            # Mixed types - convert strings to datetime for sorting, then convert back
+            # This shouldn't happen in normal operation, but handle it gracefully
+            sorted_items = sorted(
+                self.spheroid_image_dict.items(),
+                key=lambda x: datetime.strptime(x[0], '%Y-%m-%d %H:%M:%S') if isinstance(x[0], str) else x[0]
+            )
+            self.spheroid_image_dict = dict(sorted_items)
         # Invalidate all period caches since the image collection changed
         self._period_cache.clear()
+    
+    @staticmethod
+    def _process_channel_data(args):
+        """Static helper function to process image channels in parallel.
+
+        Args:
+            args: Tuple of (img_folder_path, filters, channel_name, global_filter)
+
+        Returns:
+            Tuple of (channel_name, files_dict, time_points)
+        """
+        img_folder_path, filters, channel, global_filter = args
+        if filters is None:
+            return channel, None, None
+        
+        # Combine global_filter with channel-specific filters
+        combined_filters = filters
+        if global_filter:
+            if isinstance(global_filter, str):
+                combined_filters = [global_filter, filters] if isinstance(filters, str) else [global_filter] + (filters if isinstance(filters, list) else [filters])
+            elif isinstance(global_filter, list):
+                combined_filters = global_filter + (filters if isinstance(filters, list) else [filters])
+        
+        # Use collect_data but merge all indices (wells) into a single timepoint-based structure
+        data_dict, time_points = collect_data(img_folder_path, combined_filters)
+        
+        # Merge all indices into a single timepoint-based dict
+        # Structure: {timepoint: path} instead of {index: {timepoint: path}}
+        merged_dict = {}
+        for index_dict in data_dict.values():
+            for timepoint, path in index_dict.items():
+                # If multiple files for same timepoint, take the first one
+                # (or could be extended to handle multiple files)
+                if timepoint not in merged_dict:
+                    if isinstance(path, list):
+                        merged_dict[timepoint] = path[0]  # Take first if list
+                    else:
+                        merged_dict[timepoint] = path
+        
+        return channel, merged_dict, time_points
+    
+    @staticmethod
+    def _process_timepoint_data(args):
+        """Static helper function to process a single timepoint.
+
+        Args:
+            args: Tuple containing (timepoint, files_dict, image_size, hdf5_key)
+
+        Returns:
+            Tuple of (timepoint, spheroid_image, image_paths)
+        """
+        timepoint, files_dict, image_size, hdf5_key = args
+        
+        # Collect image paths for this timepoint
+        image_paths = {}
+        for channel in files_dict:
+            if timepoint in files_dict[channel]:
+                path = files_dict[channel][timepoint]
+                if isinstance(path, list):
+                    path = path[0]  # Take first if multiple
+                image_paths[channel] = str(Path(path).absolute())
+        
+        # At least one channel must be present (brightfield is optional now)
+        if not image_paths:
+            return None  # Skip if no channels available
+        
+        # Create spheroid image (brightfield can be None if other channels are available)
+        spheroid = SpheroidImage(
+            brightfield=image_paths.get('brightfield'),  # Can be None
+            fluorescence_green=image_paths.get('fluorescence_green'),
+            fluorescence_red=image_paths.get('fluorescence_red'),
+            fluorescence_blue=image_paths.get('fluorescence_blue'),
+            image_size=image_size,
+            hdf5_key=f'{hdf5_key}/ImageSeries/{timepoint}' if hdf5_key else None
+        )
+        
+        return {
+            'timepoint': timepoint,
+            'spheroid': spheroid,
+            'image_paths': image_paths
+        }
+    
+    def load_images(self, 
+                    img_folder_path: Path | str,
+                    global_filter: str | list[str] | None = None,
+                    brightfield_filter: str | list[str] | None = None,
+                    green_filter: str | list[str] | None = None,
+                    red_filter: str | list[str] | None = None,
+                    blue_filter: str | list[str] | None = None,
+                    image_size: tuple | None = None) -> None:
+        """Load and process image data from specified folder using multiprocessing.
+        
+        This method loads images based on timepoints (not wells). It collects all images
+        matching the filters and groups them by timepoint.
+        
+        Args:
+            img_folder_path: Path to folder containing image files
+            global_filter: Global filter pattern(s) applied to all channels (str or list[str])
+            brightfield_filter: Filter pattern(s) for brightfield images (str or list[str])
+            green_filter: Optional filter pattern(s) for green fluorescence (str or list[str])
+            red_filter: Optional filter pattern(s) for red fluorescence (str or list[str])
+            blue_filter: Optional filter pattern(s) for blue fluorescence (str or list[str])
+            image_size: Optional tuple (width, height) specifying image size in μm
+            
+        Raises:
+            Exception: If images have already been loaded for this series
+        """
+        if self.spheroid_image_dict:
+            raise Exception('Images have already been loaded for this series. Clear spheroid_image_dict first if you want to reload.')
+        
+        img_folder_path = Path(img_folder_path)
+        num_cores = mp.cpu_count()
+        
+        # Prepare channel data (with global_filter)
+        channel_data = [
+            (img_folder_path, brightfield_filter, 'brightfield', global_filter),
+            (img_folder_path, green_filter, 'fluorescence_green', global_filter),
+            (img_folder_path, red_filter, 'fluorescence_red', global_filter),
+            (img_folder_path, blue_filter, 'fluorescence_blue', global_filter)
+        ]
+        
+        # Collect file paths for each channel in parallel
+        files_dict = {}
+        time_points_array = []
+        with mp.Pool(processes=num_cores) as pool:
+            for channel, channel_files_dict, time_points in pool.imap(self._process_channel_data, channel_data):
+                if channel_files_dict is not None:
+                    files_dict[channel] = channel_files_dict
+                    if not time_points_array:
+                        time_points_array = time_points
+        
+        if not time_points_array:
+            raise ValueError(f"No timepoints found in {img_folder_path} with the given filters")
+        
+        # Calculate relative times
+        time_points_dt = [datetime.strptime(tp, '%Y-%m-%d %H:%M:%S') for tp in time_points_array]
+        relative_time_array = [(tp - time_points_dt[0]).total_seconds() / 3600 for tp in time_points_dt]
+        
+        # Get HDF5 key if available
+        hdf5_key = None
+        if hasattr(self, 'hdf5_key'):
+            try:
+                hdf5_key = self.hdf5_key
+            except:
+                pass
+        
+        # Process timepoints in parallel
+        timepoint_data = [
+            (timepoint, files_dict, image_size, hdf5_key)
+            for timepoint in time_points_array
+        ]
+        
+        with mp.Pool(processes=num_cores) as pool:
+            results = list(tqdm(
+                pool.imap(self._process_timepoint_data, timepoint_data),
+                total=len(timepoint_data),
+                desc=f"Loading images for series '{self.name}'"
+            ))
+        
+        # Add valid results to series
+        hdf5_path = None
+        if hasattr(self, 'hdf5_path'):
+            try:
+                hdf5_path = self.hdf5_path
+            except:
+                pass
+        
+        # Process results and optionally save to HDF5
+        if hdf5_path and hdf5_key:
+            with h5py.File(hdf5_path, 'a') as hdf_file:
+                for result in results:
+                    if result is None:
+                        continue
+                    
+                    # Convert timepoint string to datetime
+                    timepoint_dt = datetime.strptime(result['timepoint'], '%Y-%m-%d %H:%M:%S')
+                    
+                    # Add to spheroid series
+                    self.add_spheroid_image(result['spheroid'], timepoint_dt)
+                    
+                    # Save to HDF5
+                    timepoint_group = hdf_file.require_group(
+                        f'{hdf5_key}/ImageSeries/{result["timepoint"]}'
+                    )
+                    timepoint_group.attrs['date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    timepoint_group.attrs['rel_timepoint'] = f'{relative_time_array[time_points_array.index(result["timepoint"])]}'
+                    timepoint_group.attrs['unit'] = 'h'
+                    if result['spheroid'].image_size:
+                        timepoint_group.attrs['image_size_x_y'] = result['spheroid'].image_size
+                    
+                    # Save image paths
+                    if 'image_paths' in timepoint_group:
+                        del timepoint_group['image_paths']
+                    image_path_group = timepoint_group.require_group('image_paths')
+                    for channel, path in result['image_paths'].items():
+                        image_path_group.create_dataset(channel, data=str(Path(path).absolute()).encode("utf-8"))
+        else:
+            # No HDF5, just add to series
+            for result in results:
+                if result is None:
+                    continue
+                
+                # Convert timepoint string to datetime
+                timepoint_dt = datetime.strptime(result['timepoint'], '%Y-%m-%d %H:%M:%S')
+                
+                # Add to spheroid series
+                self.add_spheroid_image(result['spheroid'], timepoint_dt)
+        
+        print(f'Images have been loaded successfully for series "{self.name}"!')
+        print(f'Loaded {len(self.spheroid_image_dict)} timepoints')
+
+    def _normalize_metric_period(self, time_period: str | None) -> str:
+        return time_period or self._DEFAULT_METRIC_PERIOD
+
+    def _denormalize_metric_period(self, period_key: str | None) -> str | None:
+        if period_key == self._DEFAULT_METRIC_PERIOD:
+            return None
+        return period_key
+
+    def store_analysis_metrics(self, metric_name: str, metrics: dict[str, float], time_period: str | None = None) -> None:
+        """
+        Store derived analysis metric values (optionally scoped to a time period) for later aggregation.
+
+        Parameters
+        ----------
+        metric_name : str
+            The name under which the metric values are stored (e.g., 'necrotic_radius').
+        metrics : dict[str, float]
+            Dictionary where the key is the metric/feature name (e.g., 'growth_rate') and the value is a float.
+        time_period : str | None, optional
+            Name of the time period the metrics belong to. ``None`` stores the metrics for the full series.
+
+        Returns
+        -------
+        None
+            No return value. Stores the metrics in the attribute 'self.analysis_metrics'.
+
+        Notes
+        -----
+        Entries with value None are filtered and not stored.
+        """
+        # Remove key-value pairs with None values; store the rest under the given metric name
+        cleaned = {k: v for k, v in metrics.items() if v is not None}
+        if cleaned:
+            period_key = self._normalize_metric_period(time_period)
+            self.analysis_metrics.setdefault(metric_name, {})
+            self.analysis_metrics[metric_name][period_key] = cleaned
+
+    def get_analysis_metrics(self, metric_name: str, time_period: str | None = None) -> dict | None:
+        """
+        Retrieve previously stored metrics for a given metric name and optional time period.
+
+        Parameters
+        ----------
+        metric_name : str
+            The key under which metrics were stored previously.
+        time_period : str | None, optional
+            When provided, only metrics for the specified period are returned.
+            Otherwise a mapping of all periods to their metric dictionaries is returned.
+
+        Returns
+        -------
+        dict or None
+            Dictionary with metric values if available, otherwise None.
+        """
+        data = self.analysis_metrics.get(metric_name)
+        if not data:
+            return None
+        if time_period is None:
+            return {
+                self._denormalize_metric_period(period_key): metrics
+                for period_key, metrics in data.items()
+            }
+        period_key = self._normalize_metric_period(time_period)
+        return data.get(period_key)
+
+    def available_analysis_metrics(self) -> list[str]:
+        """
+        Return a list of all metric names that have stored values for this series.
+
+        Returns
+        -------
+        list[str]
+            List of strings, each representing a metric name with stored analysis values.
+        """
+        return list(self.analysis_metrics.keys())
+
+    def available_metric_periods(self, metric_name: str) -> list[str | None]:
+        """
+        List the stored time periods for a given metric.
+
+        Returns
+        -------
+        list[str | None]
+            Available period labels (``None`` represents the full series).
+        """
+        data = self.analysis_metrics.get(metric_name)
+        if not data:
+            return []
+        return [self._denormalize_metric_period(key) for key in data.keys()]
 
     def save_time_periods_to_hdf5(self):
         """Save time periods to HDF5 file."""
@@ -644,7 +948,8 @@ class SpheroidSeries:
     def necrotic_radius(self, channel: str = 'red', plot: bool = True,
                        time_period: str = None, smoothing: float = 2,
                        thr: float = 0.5, use_multiprocessing: bool = True,
-                       fit: bool = True) -> dict:
+                       fit: bool = True, fit_model: str | None = 'generic',
+                       **kwargs) -> dict:
         """
         Calculate necrotic radius over time for a series of spheroid images.
         
@@ -660,7 +965,23 @@ class SpheroidSeries:
             use_multiprocessing: Whether to use multiprocessing for parallel computation
             fit: Whether to fit functions to the data. If True, fits:
                 - Linear function to outer_radius
-                - necrotic_radius_func to necrotic_radius
+                - Selected model to necrotic_radius (see fit_model parameter)
+            fit_model: Model to use for fitting necrotic radius. Options:
+                - 'generic': Generic model with t_nec, slope, plateau, a (default)
+                - 'const_uptake': Constant oxygen uptake model with R0, v, r_l
+                - None: Skip necrotic radius fitting
+            **kwargs: Additional arguments for fitting:
+                - params: Dictionary of fixed parameter values (not fitted).
+                    For 'generic': {'t_nec': float, 'slope': float, 'plateau': float, 'a': float}
+                    For 'const_uptake': {'R0': float, 'v': float, 'r_l': float}
+                    Parameters in this dict will be kept fixed during fitting.
+                - fit_params_initial: Dictionary of initial parameter guesses for fitting.
+                    For 'generic': {'t_nec': float, 'slope': float, 'plateau': float, 'a': float}
+                    For 'const_uptake': {'R0': float, 'v': float, 'r_l': float}
+                    Only parameters not in 'params' will be fitted.
+                - fit_params_bounds: Dictionary of parameter bounds as tuples (lower, upper).
+                    Keys match parameter names. If bounds are provided, initial guesses will be set
+                    to the midpoint of bounds (unless one bound is inf) for parameters not in 'params'.
             
         Returns:
             Dictionary containing:
@@ -669,9 +990,14 @@ class SpheroidSeries:
                 - necrotic_radius: List of necrotic radii in μm
                 - fit_parameters: Nested dictionary with fit parameters (if fit=True):
                     - outer_radius: Dictionary with slope, intercept, r2, covariance
-                    - necrotic_radius: Dictionary with t_nec, slope, plateau, a, r2, covariance
+                    - necrotic_radius: Dictionary with model-specific parameters, r2, covariance
                 - growth_rate: Growth rate in μm/day (slope from linear fit, if fit=True and both fits successful)
                 - critical_radius: Critical radius in μm (outer_radius at t_nec, if fit=True and both fits successful)
+
+        Notes:
+            The derived scalar metrics (growth rate, critical radius, fit
+            parameters) are cached via :meth:`store_analysis_metrics` so that
+            collection/result/experiment level helpers can compare replicates.
         """
         # Get images to analyze (either all or from specific time period)
         if time_period is not None:
@@ -839,61 +1165,151 @@ class SpheroidSeries:
                 logger.warning("Not enough valid data points for outer radius fitting")
                 fit_outer_radius = None
             
-            # Fit necrotic_radius_func to necrotic radius
-            if np.sum(valid_mask_necrotic) >= 4:  # Need at least 4 points for 4 parameters
+            # Fit selected model to necrotic radius
+            if fit_model is not None and np.sum(valid_mask_necrotic) >= 2:
                 try:
                     valid_time_necrotic = time_array[valid_mask_necrotic]
                     valid_necrotic = necrotic_radius_array[valid_mask_necrotic]
                     
-                    # Initial parameter guesses
-                    t_min = np.min(valid_time_necrotic)
-                    t_max = np.max(valid_time_necrotic)
-                    r_max = np.max(valid_necrotic)
+                    # Extract kwargs for fitting
+                    params = kwargs.get('params', {})  # Fixed parameters (not fitted)
+                    fit_params_initial = kwargs.get('fit_params_initial', {})  # Initial guesses
+                    fit_params_bounds = kwargs.get('fit_params_bounds', {})  # Parameter bounds
                     
-                    # Estimate initial parameters
-                    # t_nec: time when necrosis starts (first non-zero point or slightly before)
-                    t_nec_init = valid_time_necrotic[valid_necrotic > 0][0] if np.any(valid_necrotic > 0) else t_min
-                    # slope: approximate from data
-                    if len(valid_necrotic) > 1:
-                        slope_init = (valid_necrotic[-1] - valid_necrotic[0]) / (valid_time_necrotic[-1] - valid_time_necrotic[0]) if (valid_time_necrotic[-1] - valid_time_necrotic[0]) > 0 else 0.1
+                    # Get fit function for selected model
+                    fit_func = get_fit_model(fit_model)
+                    
+                    # Determine parameter order for the model
+                    if fit_model == 'generic':
+                        param_order = ['t_nec', 'slope', 'plateau', 'a']
+                    elif fit_model == 'const_uptake':
+                        param_order = ['R0', 'v', 'r_l']
                     else:
-                        slope_init = 0.1
-                    # plateau: maximum value
-                    plateau_init = r_max * 0.8
-                    # a: decay rate (start with moderate value)
-                    a_init = 0.1
+                        param_order = []
                     
-                    # Fit with bounds to ensure reasonable parameters
-                    bounds = ([t_min - (t_max - t_min), -np.inf, 0, 0], [t_max, np.inf, r_max * 2, 10])
-                    popt_necrotic, pcov_necrotic = curve_fit(
-                        necrotic_radius_func,
-                        valid_time_necrotic,
-                        valid_necrotic,
-                        p0=[t_nec_init, slope_init, plateau_init, a_init],
-                        bounds=bounds,
-                        maxfev=5000
-                    )
+                    # Separate fixed and free parameters
+                    fixed_params = {k: v for k, v in params.items() if k in param_order}
+                    free_params = [p for p in param_order if p not in fixed_params]
                     
-                    # Calculate R²
-                    y_pred = necrotic_radius_func(valid_time_necrotic, *popt_necrotic)
-                    ss_res = np.sum((valid_necrotic - y_pred) ** 2)
-                    ss_tot = np.sum((valid_necrotic - np.mean(valid_necrotic)) ** 2)
-                    r2_necrotic = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-                    
-                    fit_necrotic_radius = {
-                        't_nec': float(popt_necrotic[0]),
-                        'slope': float(popt_necrotic[1]),
-                        'plateau': float(popt_necrotic[2]),
-                        'a': float(popt_necrotic[3]),
-                        'r2': float(r2_necrotic),
-                        'covariance': pcov_necrotic.tolist()
-                    }
+                    if not free_params:
+                        logger.warning(f"All parameters are fixed. Cannot perform fitting.")
+                        fit_necrotic_radius = None
+                    else:
+                        # Create wrapper function that only accepts free parameters
+                        def fit_wrapper(t, *free_values):
+                            """Wrapper function that combines fixed and free parameters."""
+                            # Build full parameter list
+                            full_params = {}
+                            free_idx = 0
+                            for param_name in param_order:
+                                if param_name in fixed_params:
+                                    full_params[param_name] = fixed_params[param_name]
+                                else:
+                                    full_params[param_name] = free_values[free_idx]
+                                    free_idx += 1
+                            # Call original function with full parameter list
+                            return fit_func(t, *[full_params[p] for p in param_order])
+                        
+                        # Get default bounds for all parameters
+                        default_lower_all, default_upper_all = get_default_bounds(
+                            fit_model, valid_time_necrotic, valid_necrotic
+                        )
+                        
+                        # Build bounds and initial guesses only for free parameters
+                        bounds_lower = []
+                        bounds_upper = []
+                        p0 = []
+                        bounds_dict_free = {}
+                        
+                        for param_name in free_params:
+                            param_idx = param_order.index(param_name)
+                            
+                            # Get bounds (user-provided or default)
+                            if param_name in fit_params_bounds:
+                                lower_val, upper_val = fit_params_bounds[param_name]
+                            else:
+                                lower_val = default_lower_all[param_idx]
+                                upper_val = default_upper_all[param_idx]
+                            
+                            bounds_lower.append(lower_val)
+                            bounds_upper.append(upper_val)
+                            bounds_dict_free[param_name] = (lower_val, upper_val)
+                            
+                            # Get initial guess (user-provided, midpoint of bounds, or default)
+                            if param_name in fit_params_initial:
+                                p0.append(fit_params_initial[param_name])
+                            else:
+                                # Use default initial guess
+                                default_p0_all = get_default_initial_guess(
+                                    fit_model, valid_time_necrotic, valid_necrotic, None
+                                )
+                                p0_val = default_p0_all[param_idx]
+                                
+                                # Adjust based on bounds if both are finite
+                                if not (np.isinf(lower_val) or np.isinf(upper_val)):
+                                    p0_val = (lower_val + upper_val) / 2.0
+                                elif not np.isinf(lower_val):
+                                    p0_val = lower_val + 0.1 * abs(lower_val) if lower_val != 0 else 0.1
+                                elif not np.isinf(upper_val):
+                                    p0_val = upper_val - 0.1 * abs(upper_val) if upper_val != 0 else 0.1
+                                
+                                p0.append(p0_val)
+                        
+                        bounds = (bounds_lower, bounds_upper)
+                        
+                        # Perform fit with wrapper function (only free parameters)
+                        popt_necrotic_free, pcov_necrotic_free = curve_fit(
+                            fit_wrapper,
+                            valid_time_necrotic,
+                            valid_necrotic,
+                            p0=p0,
+                            bounds=bounds,
+                            maxfev=5000
+                        )
+                        
+                        # Reconstruct full parameter list (fixed + fitted)
+                        popt_necrotic_full = {}
+                        free_idx = 0
+                        for param_name in param_order:
+                            if param_name in fixed_params:
+                                popt_necrotic_full[param_name] = fixed_params[param_name]
+                            else:
+                                popt_necrotic_full[param_name] = popt_necrotic_free[free_idx]
+                                free_idx += 1
+                        
+                        # Calculate R² using full parameter list
+                        y_pred = fit_func(valid_time_necrotic, *[popt_necrotic_full[p] for p in param_order])
+                        ss_res = np.sum((valid_necrotic - y_pred) ** 2)
+                        ss_tot = np.sum((valid_necrotic - np.mean(valid_necrotic)) ** 2)
+                        r2_necrotic = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+                        
+                        # Build covariance matrix (only for free parameters, fixed params have 0 variance)
+                        # For fixed parameters, we set covariance to 0
+                        n_total = len(param_order)
+                        n_free = len(free_params)
+                        cov_full = np.zeros((n_total, n_total))
+                        free_indices = [param_order.index(p) for p in free_params]
+                        for i, idx_i in enumerate(free_indices):
+                            for j, idx_j in enumerate(free_indices):
+                                cov_full[idx_i, idx_j] = pcov_necrotic_free[i, j]
+                        
+                        # Store fit parameters in a dictionary with appropriate keys
+                        fit_necrotic_radius = {
+                            **{k: float(v) for k, v in popt_necrotic_full.items()},
+                            'r2': float(r2_necrotic),
+                            'covariance': cov_full.tolist(),
+                            'model': fit_model,
+                            'fixed_params': list(fixed_params.keys()) if fixed_params else []
+                        }
                 except Exception as e:
-                    logger.warning(f"Failed to fit necrotic radius: {e}")
+                    logger.warning(f"Failed to fit necrotic radius with model '{fit_model}': {e}")
                     fit_necrotic_radius = None
             else:
-                logger.warning("Not enough valid data points for necrotic radius fitting")
-                fit_necrotic_radius = None
+                if fit_model is None:
+                    fit_necrotic_radius = None
+                else:
+                    logger.warning("Not enough valid data points for necrotic radius fitting")
+                    fit_necrotic_radius = None
             
             # Calculate growth rate and critical radius if both fits are successful
             growth_rate = None
@@ -903,9 +1319,14 @@ class SpheroidSeries:
                 # Growth rate = slope from linear fit (μm/day)
                 growth_rate = fit_outer_radius['slope']
                 
-                # Critical radius = outer_radius at t_nec (from linear fit)
-                t_nec = fit_necrotic_radius['t_nec']
-                critical_radius = fit_outer_radius['slope'] * t_nec + fit_outer_radius['intercept']
+                # Critical radius calculation depends on model
+                if fit_model == 'generic' and 't_nec' in fit_necrotic_radius:
+                    # Critical radius = outer_radius at t_nec (from linear fit)
+                    t_nec = fit_necrotic_radius['t_nec']
+                    critical_radius = fit_outer_radius['slope'] * t_nec + fit_outer_radius['intercept']
+                elif fit_model == 'const_uptake' and 'r_l' in fit_necrotic_radius:
+                    # For const_uptake, critical radius is r_l (oxygen diffusion length)
+                    critical_radius = fit_necrotic_radius['r_l']
             
             # Store fit results in nested dictionary structure
             result['fit_parameters'] = {
@@ -919,13 +1340,50 @@ class SpheroidSeries:
         
         # Optional plotting
         if plot:
-            self._plot_necrotic_radius_series(result, channel, time_period, fit=fit)
+            self._plot_necrotic_radius_series(result, channel, time_period, fit=fit, fit_model=fit_model)
+
+        fit_params = result.get('fit_parameters') or {}
+        outer_fit = fit_params.get('outer_radius') or {}
+        nec_fit = fit_params.get('necrotic_radius') or {}
+        
+        # Build metrics dictionary based on model type
+        metrics_dict = {
+            'growth_rate': result.get('growth_rate'),
+            'critical_radius': result.get('critical_radius'),
+            'outer_slope': outer_fit.get('slope'),
+            'outer_intercept': outer_fit.get('intercept'),
+            'outer_r2': outer_fit.get('r2'),
+            'necrotic_r2': nec_fit.get('r2'),
+            'necrotic_model': nec_fit.get('model', fit_model)
+        }
+        
+        # Add model-specific parameters
+        if nec_fit.get('model') == 'generic' or fit_model == 'generic':
+            metrics_dict.update({
+                'necrotic_t_nec': nec_fit.get('t_nec'),
+                'necrotic_slope': nec_fit.get('slope'),
+                'necrotic_plateau': nec_fit.get('plateau'),
+                'necrotic_a': nec_fit.get('a'),
+            })
+        elif nec_fit.get('model') == 'const_uptake' or fit_model == 'const_uptake':
+            metrics_dict.update({
+                'necrotic_R0': nec_fit.get('R0'),
+                'necrotic_v': nec_fit.get('v'),
+                'necrotic_r_l': nec_fit.get('r_l'),
+            })
+        
+        self.store_analysis_metrics(
+            'necrotic_radius',
+            metrics_dict,
+            time_period=time_period,
+        )
         
         return result
     
-    def _plot_necrotic_radius_series(self, data: dict, channel: str, time_period: str | None = None, fit: bool = False):
+    def _plot_necrotic_radius_series(self, data: dict, channel: str, time_period: str | None = None, 
+                                     fit: bool = False, fit_model: str | None = 'generic'):
         """Helper method to plot necrotic radius series."""
-        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+        fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
         
         time = data['time']
         true_radius = data['outer_radius']
@@ -937,14 +1395,14 @@ class SpheroidSeries:
             valid_time = np.array(time)[valid_mask]
             valid_true = np.array(true_radius)[valid_mask]
             valid_necrotic = np.array(necrotic_radius)[valid_mask]
-            
+
             # Plot true radius (points only, no lines)
-            ax.plot(valid_time, valid_true, 'o', color='darkgray', 
-                   markersize=4, label='True Radius (Outer)' if not fit else None)
+            scat_true, = ax.plot(valid_time, valid_true, 'o', color='darkgrey', alpha=0.6,
+                   markersize=5, markeredgewidth=1.3, label='True Radius (Outer)' if not fit else None)
             
             # Plot necrotic radius (points only, no lines)
-            ax.plot(valid_time, valid_necrotic, 'o', color='red', 
-                   markersize=4, label='Necrotic Radius' if not fit else None)
+            scat_nec, = ax.plot(valid_time, valid_necrotic, 'o', color="#D98C8C", alpha=0.6,
+                   markersize=5, markeredgewidth=1.3, label='Necrotic Radius' if not fit else None)
             
             # Plot fits if available
             if fit and 'fit_parameters' in data:
@@ -956,40 +1414,267 @@ class SpheroidSeries:
                     t_fit = np.linspace(valid_time.min(), valid_time.max(), 100)
                     r_fit_outer = outer_fit['slope'] * t_fit + outer_fit['intercept']
                     r2_outer = outer_fit.get('r2', 0.0)
-                    ax.plot(t_fit, r_fit_outer, '-', color='darkgray', 
-                           linewidth=2, alpha=0.8, 
-                           label=f"Outer radius fit (R²={r2_outer:.3f})")
+                    ax.plot(t_fit, r_fit_outer, '--', color='#555555', 
+                           linewidth=2, alpha=0.99, 
+                           label=f"Outer radius (R²={r2_outer:.2f})")
                 
-                # Plot necrotic_radius_func fit
+                # Plot necrotic radius fit using selected model
                 if fit_params.get('necrotic_radius') is not None:
                     necrotic_fit = fit_params['necrotic_radius']
                     t_fit = np.linspace(valid_time.min(), valid_time.max(), 100)
-                    r_fit_necrotic = necrotic_radius_func(
-                        t_fit,
-                        necrotic_fit['t_nec'],
-                        necrotic_fit['slope'],
-                        necrotic_fit['plateau'],
-                        necrotic_fit['a']
-                    )
-                    r2_necrotic = necrotic_fit.get('r2', 0.0)
-                    ax.plot(t_fit, r_fit_necrotic, '-', color='red', 
-                           linewidth=2, alpha=0.8, 
-                           label=f"Necrotic radius fit (R²={r2_necrotic:.3f})")
+                    
+                    # Get fit function for the model used
+                    model_name = necrotic_fit.get('model', fit_model or 'generic')
+                    fit_func = get_fit_model(model_name)
+                    
+                    # Extract parameters based on model (works with both fixed and fitted params)
+                    if model_name == 'generic':
+                        # Get parameters in correct order
+                        param_order = ['t_nec', 'slope', 'plateau', 'a']
+                        params_list = [necrotic_fit.get(p) for p in param_order]
+                        if all(p is not None for p in params_list):
+                            r_fit_necrotic = fit_func(t_fit, *params_list)
+                        else:
+                            logger.warning(f"Missing parameters for generic model fit plot")
+                            r_fit_necrotic = None
+                    elif model_name == 'const_uptake':
+                        # Get parameters in correct order
+                        param_order = ['R0', 'v', 'r_l']
+                        params_list = [necrotic_fit.get(p) for p in param_order]
+                        if all(p is not None for p in params_list):
+                            r_fit_necrotic = fit_func(t_fit, *params_list)
+                        else:
+                            logger.warning(f"Missing parameters for const_uptake model fit plot")
+                            r_fit_necrotic = None
+                    else:
+                        # Fallback: try to use parameters list if available
+                        if 'parameters' in necrotic_fit:
+                            r_fit_necrotic = fit_func(t_fit, *necrotic_fit['parameters'])
+                        else:
+                            logger.warning(f"Cannot plot fit for unknown model: {model_name}")
+                            r_fit_necrotic = None
+                    
+                    if r_fit_necrotic is not None:
+                        r2_necrotic = necrotic_fit.get('r2', 0.0)
+                        model_label = model_name.replace('_', ' ').title()
+                        ax.plot(t_fit, r_fit_necrotic, '--', color='#aa0000', 
+                               linewidth=2, alpha=0.99, 
+                               label=f"Necrotic radius ({model_label}, R²={r2_necrotic:.2f})")
+
+                    #ax.legend(handles, labels, handler_map={tuple: HandlerTuple(ndivide=None)})
+
+                    plt.xlim(valid_time.min()-.3, valid_time.max()+.2)
         
-        ax.set_xlabel('Time [d]')
-        ax.set_ylabel('Radius [μm]')
-        ax.set_title(f'Necrotic Radius - {self.name}' + (f' ({time_period})' if time_period else '') + f' ({channel} channel)')
+        ax.set_xlabel('Time [d]', fontsize=12)
+        ax.set_ylabel('Radius [μm]', fontsize=12)
+        ax.set_title(f'Necrotic Radius', fontsize=16)
         ax.grid(True, alpha=0.3)
+
+        handles, labels = ax.get_legend_handles_labels()
+
+        # Beide Scatter zu einem Eintrag bündeln
+        slash = Line2D([0], [0], marker=r'$\!/\!$', color='darkgrey',
+               linestyle='None', markersize=7)
+        handles.append((scat_true, slash, scat_nec))
+        labels.append("Datapoints")
+
         if fit:
             # Only show legend if fits are available
             if 'fit_parameters' in data and (data['fit_parameters'].get('outer_radius') is not None or 
                                             data['fit_parameters'].get('necrotic_radius') is not None):
-                ax.legend()
-        else:
-            ax.legend()
+                ax.legend(handles, labels, handler_map={tuple: HandlerTuple(ndivide=None)})
+            else:
+                ax.legend(handles, labels, handler_map={tuple: HandlerTuple(ndivide=None)})
         
         plt.tight_layout()
+        plt.savefig(f'{self.name}_necrotic_radius_series.png', dpi=300)
         plt.show()
+
+    def save_mask(self, time_period: str | None = None, include_touches_border: bool = False, timespacing: float = 0.0) -> None:
+        """
+        Save masks as TIF files for all spheroid images in the series.
+        
+        Creates binary masks where pixels inside the contour are white (255) and 
+        pixels outside are black (0). Masks are saved in the parent directory 
+        in a 'mask' subfolder.
+        
+        Args:
+            time_period: Optional time period name to limit which images to process.
+                        If None, processes all images in the series.
+            include_touches_border: If False, skips images where the contour touches 
+                                   the image border. If True, includes all images.
+            timespacing: Minimum time spacing in hours between saved masks. If set to > 0,
+                        only masks that are at least this many hours apart will be saved.
+                        Default is 0.0 (no spacing requirement).
+        
+        Returns:
+            None
+        
+        Notes:
+            - Mask filenames follow the format: {well_name}_{year}y{month}m{day}d_{hour}h{minute}m_mask.tif
+            - Masks are saved in the parent directory of the first image's path, in a 'mask' subfolder
+            - The 'mask' folder is created if it doesn't exist
+            - Only images with valid contours are processed
+            - When timespacing > 0, masks are filtered to ensure minimum time spacing between saved files
+        """
+        # Get images to process (either all or from specific time period)
+        if time_period is not None:
+            if time_period not in self.time_periods:
+                raise KeyError(f"Time period '{time_period}' not found. Available: {list(self.time_periods.keys())}")
+            images_dict = self.get_images_in_period(time_period)
+        else:
+            images_dict = self.spheroid_image_dict
+        
+        if not images_dict:
+            logger.warning("No images to process for mask saving.")
+            return
+        
+        # Get parent directory from first image path
+        first_image = next(iter(images_dict.values()))
+        if not first_image.image_path_dict:
+            raise ValueError("No image paths available to determine parent directory.")
+        
+        # Use the first available image path to determine parent directory
+        first_path = None
+        for path in first_image.image_path_dict.values():
+            if path is not None:
+                first_path = Path(path)
+                break
+        
+        if first_path is None:
+            raise ValueError("No valid image path found to determine parent directory.")
+        
+        # Get parent directory and create mask subfolder
+        parent_dir = first_path.parent.parent  # Go up one level from image directory
+        mask_dir = parent_dir / "mask"
+        mask_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Extract well name from series name (e.g., "Spheroid-B7" -> "B7")
+        well_name = self.name
+        if "Spheroid-" in well_name:
+            well_name = well_name.replace("Spheroid-", "")
+        elif "-" in well_name:
+            # Try to extract well name (assume format like "B7" or similar)
+            parts = well_name.split("-")
+            well_name = parts[0] if parts else well_name
+        
+        # Process each image (sort by timepoint to ensure chronological order for timespacing)
+        sorted_timepoints = sorted(images_dict.keys())
+        
+        # Helper function to convert timepoint to datetime
+        def _ensure_dt(val):
+            if isinstance(val, datetime):
+                return val
+            try:
+                return datetime.strptime(str(val), '%Y-%m-%d %H:%M:%S')
+            except:
+                return None
+        
+        # Track last saved timepoint for timespacing
+        last_saved_timepoint = None
+        
+        saved_count = 0
+        skipped_count = 0
+        
+        for timepoint in tqdm(sorted_timepoints, desc="Saving masks"):
+            spheroid_image = images_dict[timepoint]
+            
+            # Check timespacing requirement
+            if timespacing > 0.0 and last_saved_timepoint is not None:
+                current_dt = _ensure_dt(timepoint)
+                last_dt = _ensure_dt(last_saved_timepoint)
+                
+                if current_dt is not None and last_dt is not None:
+                    time_diff_hours = (current_dt - last_dt).total_seconds() / 3600.0
+                    if time_diff_hours < timespacing:
+                        logger.debug(f"Timepoint {timepoint} skipped due to timespacing requirement "
+                                    f"({time_diff_hours:.2f}h < {timespacing}h).")
+                        skipped_count += 1
+                        continue
+            # Skip if no contour
+            if spheroid_image.contour is None:
+                logger.debug(f"No contour available for timepoint {timepoint}. Skipping.")
+                skipped_count += 1
+                continue
+            
+            # Skip if touches border and include_touches_border is False
+            if not include_touches_border and spheroid_image.contour_touches_border:
+                logger.debug(f"Contour touches border for timepoint {timepoint}. Skipping.")
+                skipped_count += 1
+                continue
+            
+            # Get image dimensions from first available image
+            image_path = None
+            for path in spheroid_image.image_path_dict.values():
+                if path is not None:
+                    image_path = Path(path)
+                    break
+            
+            if image_path is None:
+                logger.warning(f"No image path available for timepoint {timepoint}. Skipping.")
+                skipped_count += 1
+                continue
+            
+            # Load image to get dimensions
+            try:
+                img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
+                if img is None:
+                    logger.warning(f"Could not load image from {image_path}. Skipping.")
+                    skipped_count += 1
+                    continue
+                height, width = img.shape
+            except Exception as e:
+                logger.warning(f"Error loading image from {image_path}: {e}. Skipping.")
+                skipped_count += 1
+                continue
+            
+            # Create binary mask
+            mask = np.zeros((height, width), dtype=np.uint8)
+            
+            # Get contour (already in pixel coordinates)
+            contour = spheroid_image.contour
+            if contour is not None:
+                # Convert to integer coordinates for OpenCV
+                contour_pixels = contour.astype(np.int32)
+                
+                # Ensure contour is in the correct shape for cv2.fillPoly
+                # cv2.fillPoly expects a list of contours, each as (N, 1, 2) or (N, 2)
+                if contour_pixels.ndim == 2 and contour_pixels.shape[1] == 2:
+                    # Reshape to (N, 1, 2) if needed
+                    contour_pixels = contour_pixels.reshape(-1, 1, 2)
+                
+                # Fill the contour area with white (255)
+                cv2.fillPoly(mask, [contour_pixels], 255)
+            
+            # Format timepoint for filename
+            if isinstance(timepoint, datetime):
+                dt = timepoint
+            else:
+                # Try to parse as string
+                try:
+                    dt = datetime.strptime(str(timepoint), '%Y-%m-%d %H:%M:%S')
+                except:
+                    # Fallback: use current time or timepoint string
+                    logger.warning(f"Could not parse timepoint {timepoint}. Using current time.")
+                    dt = datetime.now()
+            
+            # Create filename: {well_name}_{year}y{month}m{day}d_{hour}h{minute}m_mask.tif
+            filename = f"{well_name}_{dt.year:04d}y{dt.month:02d}m{dt.day:02d}d_{dt.hour:02d}h{dt.minute:02d}m.tif"
+            mask_path = mask_dir / filename
+            
+            # Save mask as TIF
+            try:
+                cv2.imwrite(str(mask_path), mask)
+                saved_count += 1
+                last_saved_timepoint = timepoint  # Update last saved timepoint
+                logger.debug(f"Saved mask: {mask_path}")
+            except Exception as e:
+                logger.error(f"Error saving mask to {mask_path}: {e}")
+                skipped_count += 1
+        
+        logger.info(f"Mask saving completed: {saved_count} masks saved, {skipped_count} skipped.")
+        if saved_count > 0:
+            logger.info(f"Masks saved to: {mask_dir}")
 
     @property
     def timepoints(self) -> list:
@@ -1015,6 +1700,8 @@ class SpheroidSeries:
         Returns:
             DataFrame with interpolated values
         """
+        # Ensure numeric dtype for interpolation; coerce invalid to NaN
+        metric_df = metric_df.apply(pd.to_numeric, errors="coerce")
         # Sort index to ensure timepoints are in chronological order
         metric_df = metric_df.sort_index()
         
@@ -1329,6 +2016,9 @@ class SpheroidSeries:
                 ch = 'brightfield'
             try:
                 sph_img.segmentation_manual(ch)
+                # Save contour to HDF5
+                if hasattr(sph_img, '_save_contour_to_hdf5'):
+                    sph_img._save_contour_to_hdf5()
                 update_image()
             except Exception as e:
                 print(f"Manual segmentation failed: {e}")
@@ -1345,6 +2035,9 @@ class SpheroidSeries:
                 else:
                     sph_img.contour = res
                     # contour_touches_border was set inside segmentation_thresholding
+                # Save contour to HDF5
+                if hasattr(sph_img, '_save_contour_to_hdf5'):
+                    sph_img._save_contour_to_hdf5()
                 update_image()
             except Exception as e:
                 print(f"Thresholding segmentation failed: {e}")
@@ -1359,6 +2052,9 @@ class SpheroidSeries:
                     sph_img.contour, sph_img.contour_touches_border = res
                 else:
                     sph_img.contour = res
+                # Save contour to HDF5
+                if hasattr(sph_img, '_save_contour_to_hdf5'):
+                    sph_img._save_contour_to_hdf5()
                 update_image()
             except Exception as e:
                 print(f"AI segmentation failed: {e}")
@@ -1367,6 +2063,9 @@ class SpheroidSeries:
             sph_img = self.spheroid_image_dict[timepoints[idx]]
             sph_img.contour = None
             sph_img.contour_touches_border = False
+            # Save deletion to HDF5 (remove contour from file)
+            if hasattr(sph_img, '_save_contour_to_hdf5'):
+                sph_img._save_contour_to_hdf5()  # This will handle None contour correctly
             update_image()
 
         manual_btn.on_click(manual_segmentation)

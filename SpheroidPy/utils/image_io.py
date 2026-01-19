@@ -1,5 +1,6 @@
 """
-Utility functions for reading image files, including support for .zvi (Zeiss Vision Image) format.
+Utility functions for reading image files, including support for .zvi (Zeiss Vision Image) 
+and .nd2 (Nikon ND2) formats.
 """
 import struct
 import numpy as np
@@ -12,6 +13,24 @@ try:
     OLEFILEIO_AVAILABLE = True
 except ImportError:
     OLEFILEIO_AVAILABLE = False
+
+try:
+    from nd2reader import ND2Reader
+    ND2READER_AVAILABLE = True
+except ImportError:
+    ND2READER_AVAILABLE = False
+    ND2Reader = None
+
+# Optional skimage imports for ND2 processing
+try:
+    from skimage.util import img_as_ubyte
+    from skimage import exposure, color
+    SKIMAGE_AVAILABLE = True
+except ImportError:
+    SKIMAGE_AVAILABLE = False
+    img_as_ubyte = None
+    exposure = None
+    color = None
 
 import cv2
 import logging
@@ -241,19 +260,87 @@ def read_zvi_image(filepath: str | Path, plane: int = 0) -> np.ndarray:
         raise IOError(f"Failed to read ZVI file {filepath}: {e}")
 
 
+def read_nd2_image(filepath: str | Path, frame: int = 0) -> np.ndarray:
+    """
+    Read a .nd2 (Nikon ND2) file and return image as numpy array.
+    
+    Args:
+        filepath: Path to the .nd2 file
+        frame: Frame index (default: 0 for first frame)
+        
+    Returns:
+        numpy array of the image (BGR format for color images, grayscale for single channel)
+        
+    Raises:
+        ImportError: If nd2reader or skimage is not available
+        IOError: If file cannot be read
+    """
+    if not ND2READER_AVAILABLE:
+        raise ImportError(
+            "nd2reader is required to read .nd2 files. Install it with: pip install nd2reader"
+        )
+    
+    if not SKIMAGE_AVAILABLE:
+        raise ImportError(
+            "scikit-image is required to process .nd2 files. Install it with: pip install scikit-image"
+        )
+    
+    filepath = Path(filepath)
+    if not filepath.exists():
+        raise IOError(f"ND2 file not found: {filepath}")
+    
+    try:
+        with ND2Reader(str(filepath)) as image_reader:
+            nd2_image = image_reader[frame]
+            
+            # Image Conversion --------------------------------------
+            
+            # Transforming image from 16bits into 8 bit
+            nd2_image = img_as_ubyte(nd2_image)
+            
+            # Rescaling color intensity, if not image gets very dark
+            nd2_image = exposure.rescale_intensity(nd2_image)
+            
+            # Converting 1 channel image to 3 channels
+            # nd2_image is here (H, W) or (H, W, 1)
+            if nd2_image.ndim == 2:
+                nd2_image = color.gray2rgb(nd2_image)
+            elif nd2_image.ndim == 3 and nd2_image.shape[2] == 1:
+                nd2_image = np.repeat(nd2_image, 3, axis=2)
+            
+            # Ensure uint8 dtype
+            if nd2_image.dtype != np.uint8:
+                # If float, scale to [0, 255]
+                if np.issubdtype(nd2_image.dtype, np.floating):
+                    nd2_image = (nd2_image * 255).astype(np.uint8)
+                else:
+                    # For other integer types, convert directly
+                    nd2_image = nd2_image.astype(np.uint8)
+            
+            # Convert RGB to BGR for OpenCV compatibility
+            if nd2_image.ndim == 3 and nd2_image.shape[2] == 3:
+                nd2_image = cv2.cvtColor(nd2_image, cv2.COLOR_RGB2BGR)
+            
+            return nd2_image
+            
+    except Exception as e:
+        raise IOError(f"Failed to read ND2 file {filepath}: {e}")
+
+
 def imread(filepath: str | Path, flags: int = cv2.IMREAD_COLOR) -> Optional[np.ndarray]:
     """
     Read an image file, preferring the fast OpenCV imread() path first and 
-    automatically falling back to .zvi reading if necessary.
+    automatically falling back to specialized readers (.zvi, .nd2) if necessary.
     
     This function behaves like a drop-in replacement for cv2.imread(), but with 
-    additional support for .zvi (Zeiss Vision Image) files. For all formats, the 
-    function first attempts loading via OpenCV for maximum performance. Only if 
-    that fails and the file extension is .zvi, the slower .zvi loader is used.
+    additional support for .zvi (Zeiss Vision Image) and .nd2 (Nikon ND2) files. 
+    For all formats, the function first attempts loading via OpenCV for maximum 
+    performance. Only if that fails and the file extension matches a supported 
+    format, the specialized loader is used.
     
     Args:
         filepath: Path to the image file.
-        flags: OpenCV imread flags (only relevant for non-.zvi files).
+        flags: OpenCV imread flags (only relevant for non-.zvi/.nd2 files).
         
     Returns:
         numpy array of the image, or None if the file cannot be read.
@@ -281,6 +368,18 @@ def imread(filepath: str | Path, flags: int = cv2.IMREAD_COLOR) -> Optional[np.n
             logger.error(f"Error reading .zvi file {filepath}: {e}")
             return None
 
-    # --- 3) All methods failed ---
-    logger.warning(f"cv2.imread failed and file is not .zvi: {filepath}")
+    # --- 3) Fallback: Check for .nd2 ---
+    if filepath.suffix.lower() == ".nd2":
+        try:
+            return read_nd2_image(filepath, frame=0)
+        except ImportError as e:
+            logger.error(f"Cannot read .nd2 file: {e}")
+            logger.error(f"To read .nd2 files, install: pip install nd2reader scikit-image")
+            return None
+        except Exception as e:
+            logger.error(f"Error reading .nd2 file {filepath}: {e}")
+            return None
+
+    # --- 4) All methods failed ---
+    logger.warning(f"cv2.imread failed and file is not a supported specialized format (.zvi, .nd2): {filepath}")
     return None
