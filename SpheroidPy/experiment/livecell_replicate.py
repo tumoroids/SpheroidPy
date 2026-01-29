@@ -568,7 +568,7 @@ class LiveCellReplicate:
             print(f"Successfully segmented {total_success}/{total_images} images across {len(all_series_args)} series")
 
     def compare(self, condition: str, metric: str = 'radius', plot: bool = True,
-                timepoint: int | str | None = None) -> pd.DataFrame:
+                timepoint: int | str | None = None, fit: bool = False, **kwargs) -> pd.DataFrame:
         """
         Compare collections across a specific condition, grouping by other conditions.
 
@@ -584,6 +584,12 @@ class LiveCellReplicate:
                 - If int: Timepoint in hours (relative time)
                 - If str: Timepoint as datetime string (e.g., '2025-03-27 20:00:00')
                 - If None: Average across all timepoints (default)
+            fit: Whether to fit models to the data (default: False)
+                - If condition is a cell line (cell number): fits effective cell volume
+                - If condition is a compound: fits Hill curve (IC50, Hill slope)
+            **kwargs: Additional parameters for fitting:
+                - For cell line fits: 'aspect_ratio' (default: 1.0)
+                - For compound fits: passed to Hill curve fitting
 
         Returns:
             DataFrame with:
@@ -592,8 +598,22 @@ class LiveCellReplicate:
                 - Values: Metric values (mean ± std across technical replicates within each collection)
                 - If timepoint is specified, returns mean and std for that timepoint
                 - If timepoint is None, returns mean across all timepoints
+                - If fit=True, also returns fit parameters as attributes on the DataFrame
         """
         import matplotlib.pyplot as plt
+        
+        # Handle backward compatibility: if metric is an int, it's probably timepoint
+        if isinstance(metric, (int, float)) and timepoint is None:
+            timepoint = metric
+            metric = 'radius'
+            logger.warning(
+                f"Interpreting second argument as timepoint. Use compare('{condition}', timepoint={timepoint}) "
+                f"for clarity. Using metric='radius'."
+            )
+        
+        # Ensure metric is a string
+        if not isinstance(metric, str):
+            raise TypeError(f"metric must be a string, got {type(metric)}")
 
         if not self.data_has_been_loaded:
             print("No data loaded for this replicate. Call load_images() first.")
@@ -768,9 +788,9 @@ class LiveCellReplicate:
         target_timepoint = None
         if timepoint is not None:
             # Convert timepoint to appropriate format
-            if isinstance(timepoint, int):
-                # Timepoint in hours (relative time)
-                target_timepoint = timepoint
+            if isinstance(timepoint, (int, float)):
+                # Timepoint in hours (relative time) - convert to float for consistent comparison
+                target_timepoint = float(timepoint)
             elif isinstance(timepoint, str):
                 # Timepoint as datetime string
                 try:
@@ -795,14 +815,14 @@ class LiveCellReplicate:
             if not group_df_mean.empty:
                 if target_timepoint is not None:
                     # Find the closest timepoint
-                    if isinstance(target_timepoint, int):
+                    if isinstance(target_timepoint, (int, float)):
                         # Convert hours to timepoint index (assuming index is in hours)
                         # Find closest timepoint in hours
                         closest_idx = None
                         min_diff = float('inf')
                         for idx in group_df_mean.index:
                             if isinstance(idx, (int, float)):
-                                diff = abs(idx - target_timepoint)
+                                diff = abs(float(idx) - float(target_timepoint))
                             else:
                                 # Try to convert to hours
                                 try:
@@ -867,39 +887,613 @@ class LiveCellReplicate:
         result_df_mean.index.name = condition
         result_df_std.index.name = condition
 
+        # Perform fitting if requested
+        fit_results = {}
+        if fit and not result_df_mean.empty:
+            # Determine if condition is a cell line (cell number) or compound
+            is_cell_line = condition in self.platemap.cell_lines
+            is_compound = condition in self.platemap.compounds
+            
+            if is_cell_line:
+                # Fit effective cell volume: V_spheroid = 4/3 * pi * r^3 * aspect_ratio = V_cell * n_cells
+                fit_results = self._fit_cell_volume(
+                    result_df_mean, result_df_std, condition, metric, **kwargs
+                )
+            elif is_compound:
+                # Fit Hill curve: IC50 and Hill slope
+                fit_results = self._fit_hill_curve(
+                    result_df_mean, result_df_std, condition, metric, **kwargs
+                )
+            else:
+                logger.warning(
+                    f"Condition '{condition}' is neither a cell line nor a compound. "
+                    f"Skipping fit. Available cell lines: {list(self.platemap.cell_lines.keys())}, "
+                    f"Available compounds: {list(self.platemap.compounds.keys())}"
+                )
+        
         # Plot if requested
         if plot and not result_df_mean.empty:
             plt.figure(figsize=(10, 6))
+            
+            # Determine if condition values are logarithmic or linear
+            # Check if values span multiple orders of magnitude (log scale)
+            condition_values = result_df_mean.index.values
+            use_log_scale = False
+            
+            # Filter out NaN and ensure numeric
+            try:
+                numeric_values = []
+                for v in condition_values:
+                    try:
+                        if isinstance(v, (int, float)):
+                            if not (np.isnan(v) or np.isinf(v)) and v > 0:
+                                numeric_values.append(float(v))
+                        elif isinstance(v, str):
+                            # Try to convert string to float
+                            val = float(v)
+                            if val > 0:
+                                numeric_values.append(val)
+                    except (ValueError, TypeError):
+                        continue
+                
+                if numeric_values and len(numeric_values) >= 2:
+                    min_val = min(numeric_values)
+                    max_val = max(numeric_values)
+                    # Use log scale if span is > 2 orders of magnitude (100x)
+                    if min_val > 0:
+                        use_log_scale = (max_val / min_val) > 100
+            except Exception:
+                # If anything goes wrong, default to linear scale
+                use_log_scale = False
 
             for col in result_df_mean.columns:
                 mean_values = result_df_mean[col]
                 std_values = result_df_std[col]
 
-                # Plot with error bars
+                # Plot with error bars - no lines between points (fmt='o' not 'o-')
                 plt.errorbar(
                     result_df_mean.index,
                     mean_values,
                     yerr=std_values,
-                    fmt='o-',
-                    label=col,
-                    linewidth=2,
+                    fmt='o',  # Only markers, no lines
                     markersize=8,
                     capsize=5,
-                    capthick=2
+                    capthick=2,
+                    alpha=0.7
                 )
+                
+                # Plot fit curve if available (only when fit=True)
+                if fit and col in fit_results:
+                    fit_data = fit_results[col]
+                    if 'x_fit' in fit_data and 'y_fit' in fit_data:
+                        x_fit = fit_data['x_fit']
+                        y_fit = fit_data['y_fit']
+                        plt.plot(x_fit, y_fit, '--', alpha=0.7, linewidth=2)
 
             timepoint_str = f" at {timepoint}" if timepoint is not None else " (mean across timepoints)"
             plt.xlabel(condition)
             plt.ylabel(metric)
-            plt.title(f'{metric} vs {condition}{timepoint_str} (mean ± std)')
+            title = f'{metric} vs {condition}{timepoint_str} (mean ± std)'
+            if fit and fit_results:
+                # Add fit parameters to title
+                fit_params_str = []
+                for col, fit_data in fit_results.items():
+                    if 'parameters' in fit_data:
+                        params = fit_data['parameters']
+                        if 'V_cell' in params:
+                            fit_params_str.append(f"V_cell={params['V_cell']:.2e} μm³")
+                        elif 'IC50' in params:
+                            fit_params_str.append(f"IC50={params['IC50']:.2e}, Hill={params['Hill_slope']:.2f}")
+                if fit_params_str:
+                    title += f" | {', '.join(fit_params_str)}"
+            plt.title(title)
             plt.grid(True, alpha=0.3)
-            plt.legend()
+            # No legend
+            # Set x-axis scale
+            if use_log_scale:
+                plt.xscale('log')
             plt.tight_layout()
             plt.show()
+
+        # Store fit results as DataFrame attribute
+        if fit_results:
+            result_df_mean.attrs['fit_results'] = fit_results
 
         # Return DataFrame with mean values (std can be accessed via result_df_std if needed)
         # For convenience, we could return a MultiIndex DataFrame, but for now return mean
         return result_df_mean
+    
+    def _fit_cell_volume(self, result_df_mean: pd.DataFrame, result_df_std: pd.DataFrame,
+                        condition: str, metric: str, **kwargs) -> dict:
+        """Fit effective cell volume from spheroid volume and cell number.
+        
+        Fits: V_spheroid = 4/3 * pi * r^3 * aspect_ratio = V_cell * n_cells
+        Solves for V_cell (effective cell volume).
+        
+        Args:
+            result_df_mean: DataFrame with mean metric values (condition values as index)
+            result_df_std: DataFrame with std metric values
+            condition: Name of the condition (cell line)
+            metric: Metric name (should be 'radius' or 'area')
+            **kwargs: Additional parameters:
+                - aspect_ratio: Aspect ratio for spheroid (default: 1.0)
+        
+        Returns:
+            Dictionary mapping column names to fit results with keys:
+                - 'parameters': Dict with 'V_cell' and other fit parameters
+                - 'x_fit': Array of x values for fit curve
+                - 'y_fit': Array of y values for fit curve
+                - 'r2': R-squared value
+        """
+        from scipy.optimize import curve_fit
+        
+        aspect_ratio = kwargs.get('aspect_ratio', 1.0)
+        fit_results = {}
+        
+        for col in result_df_mean.columns:
+            # Get condition values (cell numbers) and metric values
+            x_data = result_df_mean.index.values  # Cell numbers
+            y_data = result_df_mean[col].values   # Metric values (radius or area)
+            
+            # Filter out NaN values
+            valid_mask = ~np.isnan(x_data) & ~np.isnan(y_data)
+            x_valid = x_data[valid_mask]
+            y_valid = y_data[valid_mask]
+            
+            if len(x_valid) < 2:
+                logger.warning(f"Not enough valid data points for fitting column '{col}'")
+                continue
+            
+            # Convert metric to volume based on metric type
+            if metric == 'radius':
+                # V_spheroid = 4/3 * pi * r^3 * aspect_ratio
+                volumes = (4/3) * np.pi * (y_valid ** 3) * aspect_ratio
+            elif metric == 'area':
+                # For area, we need to estimate radius first: A = pi * r^2, so r = sqrt(A/pi)
+                # Then V = 4/3 * pi * r^3 * aspect_ratio
+                radii = np.sqrt(y_valid / np.pi)
+                volumes = (4/3) * np.pi * (radii ** 3) * aspect_ratio
+            else:
+                logger.warning(f"Metric '{metric}' not supported for cell volume fitting. Use 'radius' or 'area'.")
+                continue
+            
+            # Fit: V_spheroid = V_cell * n_cells
+            # Linear fit through origin: V = V_cell * n
+            def linear_through_origin(n, V_cell):
+                return V_cell * n
+            
+            try:
+                # Fit with initial guess
+                V_cell_initial = volumes[-1] / x_valid[-1] if x_valid[-1] > 0 else 1.0
+                popt, pcov = curve_fit(
+                    linear_through_origin,
+                    x_valid,
+                    volumes,
+                    p0=[V_cell_initial],
+                    bounds=(0, np.inf)
+                )
+                
+                V_cell = popt[0]
+                
+                # Calculate R²
+                y_pred = linear_through_origin(x_valid, V_cell)
+                ss_res = np.sum((volumes - y_pred) ** 2)
+                ss_tot = np.sum((volumes - np.mean(volumes)) ** 2)
+                r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+                
+                # Generate fit curve for plotting
+                x_fit = np.linspace(x_valid.min(), x_valid.max(), 100)
+                if metric == 'radius':
+                    # Solve for radius: r = (V_cell * n / (4/3 * pi * aspect_ratio))^(1/3)
+                    volumes_fit = linear_through_origin(x_fit, V_cell)
+                    y_fit = (volumes_fit / ((4/3) * np.pi * aspect_ratio)) ** (1/3)
+                else:  # area
+                    # Solve for area: A = pi * r^2, where r = (V_cell * n / (4/3 * pi * aspect_ratio))^(1/3)
+                    volumes_fit = linear_through_origin(x_fit, V_cell)
+                    radii_fit = (volumes_fit / ((4/3) * np.pi * aspect_ratio)) ** (1/3)
+                    y_fit = np.pi * (radii_fit ** 2)
+                
+                fit_results[col] = {
+                    'parameters': {
+                        'V_cell': float(V_cell),
+                        'aspect_ratio': float(aspect_ratio),
+                        'covariance': pcov.tolist()
+                    },
+                    'x_fit': x_fit,
+                    'y_fit': y_fit,
+                    'r2': float(r2)
+                }
+                
+                logger.info(f"Cell volume fit for '{col}': V_cell = {V_cell:.2e} μm³, R² = {r2:.3f}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to fit cell volume for column '{col}': {e}")
+                continue
+        
+        return fit_results
+    
+    def _fit_hill_curve(self, result_df_mean: pd.DataFrame, result_df_std: pd.DataFrame,
+                       condition: str, metric: str, **kwargs) -> dict:
+        """Fit Hill curve for compound dose-response data.
+        
+        Fits: response = bottom + (top - bottom) / (1 + (IC50 / concentration)^Hill_slope)
+        
+        Args:
+            result_df_mean: DataFrame with mean metric values (concentrations as index)
+            result_df_std: DataFrame with std metric values
+            condition: Name of the condition (compound)
+            metric: Metric name
+            **kwargs: Additional parameters for fitting:
+                - bottom: Minimum response (default: estimated from data)
+                - top: Maximum response (default: estimated from data)
+                - IC50_initial: Initial guess for IC50 (default: median concentration)
+                - Hill_initial: Initial guess for Hill slope (default: 1.0)
+        
+        Returns:
+            Dictionary mapping column names to fit results with keys:
+                - 'parameters': Dict with 'IC50', 'Hill_slope', 'bottom', 'top', 'r2'
+                - 'x_fit': Array of x values for fit curve
+                - 'y_fit': Array of y values for fit curve
+        """
+        from scipy.optimize import curve_fit
+        
+        fit_results = {}
+        
+        for col in result_df_mean.columns:
+            # Get concentration values and metric values
+            x_data = result_df_mean.index.values  # Concentrations
+            y_data = result_df_mean[col].values    # Metric values
+            
+            # Filter out NaN values and ensure positive concentrations
+            valid_mask = ~np.isnan(x_data) & ~np.isnan(y_data) & (x_data > 0)
+            x_valid = x_data[valid_mask]
+            y_valid = y_data[valid_mask]
+            
+            if len(x_valid) < 3:
+                logger.warning(f"Not enough valid data points for Hill curve fitting column '{col}'")
+                continue
+            
+            # Hill curve function
+            def hill_curve(conc, IC50, Hill_slope, bottom, top):
+                """Hill curve: response = bottom + (top - bottom) / (1 + (IC50/conc)^Hill)"""
+                return bottom + (top - bottom) / (1 + (IC50 / conc) ** Hill_slope)
+            
+            # Get initial guesses and bounds
+            bottom_initial = kwargs.get('bottom', np.min(y_valid))
+            top_initial = kwargs.get('top', np.max(y_valid))
+            IC50_initial = kwargs.get('IC50_initial', np.median(x_valid))
+            Hill_initial = kwargs.get('Hill_initial', 1.0)
+            
+            # Ensure reasonable bounds
+            p0 = [IC50_initial, Hill_initial, bottom_initial, top_initial]
+            bounds = (
+                [x_valid.min() * 0.01, 0.1, -np.inf, -np.inf],  # Lower bounds
+                [x_valid.max() * 100, 10.0, np.inf, np.inf]      # Upper bounds
+            )
+            
+            try:
+                popt, pcov = curve_fit(
+                    hill_curve,
+                    x_valid,
+                    y_valid,
+                    p0=p0,
+                    bounds=bounds,
+                    maxfev=5000
+                )
+                
+                IC50, Hill_slope, bottom, top = popt
+                
+                # Ensure values are scalars
+                IC50 = float(IC50)
+                Hill_slope = float(Hill_slope)
+                bottom = float(bottom)
+                top = float(top)
+                
+                # Calculate R²
+                y_pred = hill_curve(x_valid, IC50, Hill_slope, bottom, top)
+                ss_res = np.sum((y_valid - y_pred) ** 2)
+                ss_tot = np.sum((y_valid - np.mean(y_valid)) ** 2)
+                r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+                
+                # Generate fit curve for plotting
+                x_fit = np.logspace(
+                    np.log10(x_valid.min() * 0.1),
+                    np.log10(x_valid.max() * 10),
+                    100
+                )
+                y_fit = hill_curve(x_fit, IC50, Hill_slope, bottom, top)
+                
+                # Handle covariance matrix - ensure it's 2D
+                if pcov.ndim == 1:
+                    # If 1D, create a diagonal matrix
+                    pcov_2d = np.diag(pcov)
+                else:
+                    pcov_2d = pcov
+                
+                fit_results[col] = {
+                    'parameters': {
+                        'IC50': IC50,
+                        'Hill_slope': Hill_slope,
+                        'bottom': bottom,
+                        'top': top,
+                        'r2': float(r2),
+                        'covariance': pcov_2d.tolist()
+                    },
+                    'x_fit': x_fit,
+                    'y_fit': y_fit
+                }
+                
+                logger.info(
+                    f"Hill curve fit for '{col}': IC50 = {IC50:.2e}, "
+                    f"Hill slope = {Hill_slope:.2f}, R² = {r2:.3f}"
+                )
+                
+            except Exception as e:
+                logger.warning(f"Failed to fit Hill curve for column '{col}': {e}")
+                continue
+        
+        return fit_results
+
+    def metric(
+        self,
+        name: str = "radius",
+        *,
+        average: bool = False,
+        mean: bool = False,
+        ignore_border: bool = True,
+        plot: bool = False,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """Calculate a metric across all collections in this replicate.
+        
+        This method calculates metrics for all collections that belong to this replicate,
+        aggregating technical replicates (individual spheroid series within collections)
+        and optionally aggregating across collections (biological replicates).
+        
+        Args:
+            name: Metric name forwarded to ``SpheroidCollection.metric`` / ``SpheroidSeries.metric``.
+            average: If True and ``mean=False``, average technical replicates within each collection.
+            mean: If True, calculate mean ± std across all collections in this replicate.
+            ignore_border: Forwarded to collection/series metric calculation.
+            plot: Whether to display a unified plot. If True, creates a single plot
+                instead of calling individual collection plots.
+            **kwargs: Additional keyword arguments passed to the underlying
+                ``SpheroidCollection.metric`` call (except 'plot' which is handled here).
+        
+        Returns:
+            DataFrame with metric values over time:
+                - If ``mean=False``: One column per collection (and optionally per series if ``average=False``)
+                - If ``mean=True``: Mean and std columns for each condition
+                - Index: Timepoints (from time_points_array or relative_time_array)
+        """
+        if not self.data_has_been_loaded:
+            print("No data loaded for this replicate. Call load_images() first.")
+            return pd.DataFrame()
+        
+        # Get all collections for this replicate
+        collections = self.get_collections()
+        
+        if not collections:
+            print("No collections found. Ensure platemap is configured and images are loaded.")
+            return pd.DataFrame()
+        
+        if mean:
+            # Build per-collection DataFrames with one column per technical replicate (series)
+            per_collection_frames: list[pd.DataFrame] = []
+            
+            for condition_tuple, collection in collections.items():
+                # Always use mean=False here to get individual series as replicates
+                coll_df = collection.metric(
+                    name=name,
+                    mean=False,
+                    interpolate=True,  # ensure interpolation when computing means
+                    ignore_border=ignore_border,
+                    plot=False,
+                    **{k: v for k, v in kwargs.items() if k not in {"plot", "mean", "average"}},
+                )
+                if coll_df.empty:
+                    continue
+                
+                # Ensure numeric dtype for aggregation
+                coll_df = coll_df.apply(pd.to_numeric, errors="coerce")
+                
+                # Label columns with collection name + series id
+                if isinstance(coll_df.columns, pd.MultiIndex):
+                    suffix = coll_df.columns.get_level_values(-1).tolist()
+                else:
+                    suffix = coll_df.columns.tolist()
+                new_columns = [(collection.name, s) for s in suffix]
+                coll_df.columns = pd.MultiIndex.from_tuples(new_columns)
+                
+                per_collection_frames.append(coll_df)
+            
+            if not per_collection_frames:
+                print("No metric data could be calculated for any collection.")
+                return pd.DataFrame()
+            
+            # Combine all technical replicates across all collections
+            full_df = pd.concat(per_collection_frames, axis=1, sort=False)
+            full_df = full_df.sort_index(axis=1)
+            
+            # Calculate mean and std across all technical replicates
+            mean_series = full_df.mean(axis=1, skipna=True)
+            std_series = full_df.std(axis=1, ddof=1, skipna=True)
+            
+            # Create result DataFrame with mean and std
+            result_df = pd.concat(
+                [
+                    mean_series.rename((self.name, "mean")),
+                    std_series.rename((self.name, "std")),
+                ],
+                axis=1,
+            )
+            result_df.columns = pd.MultiIndex.from_tuples(result_df.columns)
+            
+        else:
+            # No aggregation across collections; optionally average technical replicates
+            frames: list[pd.DataFrame] = []
+            seen_series = set()  # Track series to avoid duplicates
+            
+            for condition_tuple, collection in collections.items():
+                df = collection.metric(
+                    name=name,
+                    mean=average,
+                    ignore_border=ignore_border,
+                    plot=False,  # Never plot individual collections
+                    **{k: v for k, v in kwargs.items() if k not in {"plot", "mean", "average"}},
+                )
+                if df.empty:
+                    continue
+                
+                # Handle MultiIndex columns from collection.metric(mean=True)
+                if isinstance(df.columns, pd.MultiIndex):
+                    # Extract the suffix (last level: 'mean', 'std', or series names)
+                    suffix = df.columns.get_level_values(-1).tolist()
+                    new_columns = []
+                    for s in suffix:
+                        # Create unique column name: (collection_name, series_name)
+                        col_tuple = (collection.name, s)
+                        # Only add if not already seen (avoid duplicates)
+                        if col_tuple not in seen_series:
+                            new_columns.append(col_tuple)
+                            seen_series.add(col_tuple)
+                        else:
+                            # If duplicate, add collection name to make it unique
+                            new_columns.append((collection.name, f"{s}_{collection.name}"))
+                else:
+                    # Simple column names - convert to list of tuples
+                    suffix = df.columns.tolist() if hasattr(df.columns, 'tolist') else list(df.columns)
+                    new_columns = []
+                    for s in suffix:
+                        col_tuple = (collection.name, s)
+                        if col_tuple not in seen_series:
+                            new_columns.append(col_tuple)
+                            seen_series.add(col_tuple)
+                        else:
+                            new_columns.append((collection.name, f"{s}_{collection.name}"))
+                
+                # Only keep columns that were added (filter out duplicates)
+                if len(new_columns) < len(df.columns):
+                    # Some columns were filtered out - select only the ones we want
+                    df = df.iloc[:, :len(new_columns)]
+                
+                # Create new MultiIndex with collection name as first level
+                df.columns = pd.MultiIndex.from_tuples(new_columns)
+                frames.append(df)
+            
+            if not frames:
+                print("No metric data could be calculated for any collection.")
+                return pd.DataFrame()
+            
+            # Combine all frames - use outer join to handle different timepoints
+            result_df = pd.concat(frames, axis=1, sort=False, join='outer')
+            result_df = result_df.sort_index(axis=1)
+        
+        # Create unified plot if requested
+        if plot:
+            self._plot_metric(result_df, name, mean, ignore_border, **kwargs)
+        
+        return result_df
+    
+    def _plot_metric(
+        self,
+        df: pd.DataFrame,
+        name: str,
+        mean: bool,
+        ignore_border: bool,
+        skip_nan: bool = True,
+        **kwargs,
+    ) -> None:
+        """Create a unified plot for all collections in this replicate."""
+        import matplotlib.pyplot as plt
+        
+        plt.figure(figsize=(10, 6))
+        
+        # Use relative_time_array if available, otherwise use index
+        if self.relative_time_array and len(self.relative_time_array) == len(df.index):
+            x = np.array(self.relative_time_array) / 24  # Convert to days
+        else:
+            # Fallback: use index as time
+            x = np.array(range(len(df.index)))
+        
+        if mean:
+            # Plot mean ± std
+            if isinstance(df.columns, pd.MultiIndex):
+                for label in df.columns.get_level_values(0).unique():
+                    mean_col = (label, 'mean')
+                    std_col = (label, 'std')
+                    
+                    if mean_col in df.columns and std_col in df.columns:
+                        mean_array = df[mean_col]
+                        std_array = df[std_col]
+                        
+                        if skip_nan:
+                            valid_mask = ~np.isnan(mean_array)
+                            x_plot = x[valid_mask]
+                            mean_plot = mean_array[valid_mask]
+                            std_plot = std_array[valid_mask]
+                        else:
+                            x_plot = x
+                            mean_plot = mean_array
+                            std_plot = std_array
+                        
+                        plt.fill_between(x_plot,
+                                        mean_plot - std_plot,
+                                        mean_plot + std_plot,
+                                        alpha=0.3,
+                                        color='grey')
+                        plt.plot(x_plot, mean_plot, 'o-', label=f"{label} (mean ± std)")
+            else:
+                # Fallback for non-MultiIndex columns
+                for col in df.columns:
+                    y = df[col]
+                    if skip_nan:
+                        valid_mask = ~np.isnan(y)
+                        plt.plot(x[valid_mask], y[valid_mask], 'o-', label=col, alpha=0.7)
+                    else:
+                        plt.plot(x, y, 'o-', label=col, alpha=0.7)
+        else:
+            # Plot individual series from each collection
+            if isinstance(df.columns, pd.MultiIndex):
+                # MultiIndex columns: (collection_name, series_name)
+                for label in df.columns.get_level_values(0).unique():
+                    # Get all columns for this collection
+                    collection_cols = [col for col in df.columns if col[0] == label]
+                    
+                    for idx, col in enumerate(collection_cols):
+                        y = df[col]
+                        col_label = f"{label}: {col[1]}" if isinstance(col, tuple) and len(col) > 1 else str(col)
+                        
+                        if skip_nan:
+                            valid_mask = ~np.isnan(y)
+                            plt.plot(x[valid_mask], y[valid_mask], 'o-', 
+                                   label=col_label,
+                                   alpha=0.7)
+                        else:
+                            plt.plot(x, y, 'o-',
+                                   label=col_label,
+                                   alpha=0.7)
+            else:
+                # Simple column names
+                for idx, col in enumerate(df.columns):
+                    y = df[col]
+                    if skip_nan:
+                        valid_mask = ~np.isnan(y)
+                        plt.plot(x[valid_mask], y[valid_mask], 'o-', 
+                               label=col,
+                               alpha=0.7)
+                    else:
+                        plt.plot(x, y, 'o-',
+                               label=col,
+                               alpha=0.7)
+        
+        plt.grid(True, alpha=0.3)
+        plt.xlabel('Time [d]')
+        plt.ylabel(name)
+        plt.title(f'{name} over time - {self.name}' + (' (mean ± std)' if mean else ''))
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
     @classmethod
     def from_file(cls, name: str, replicate_index: int, result: "Result", 

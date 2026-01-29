@@ -1,5 +1,5 @@
 from typing import Union
-    import logging
+import logging
 
 # Detectron2 utilities
 from SpheroidPy.utils.detectron_utils import (
@@ -1755,9 +1755,9 @@ class SpheroidImage:
             
             if not centers:
                 # Fallback: verwende größtes Objekt
-        sizes = np.bincount(labeled_mask.ravel())
-        main_label = sizes[1:].argmax() + 1
-        main_mask = labeled_mask == main_label
+                sizes = np.bincount(labeled_mask.ravel())
+                main_label = sizes[1:].argmax() + 1
+                main_mask = labeled_mask == main_label
                 logger.warning("Could not calculate centers. Using largest object instead.")
             else:
                 # Berechne Distanz zum Bildzentrum für jedes Objekt
@@ -2285,7 +2285,7 @@ class SpheroidImage:
             and triangles is an array of triangle vertex indices
         """
         try:
-        from meshpy.triangle import MeshInfo, build
+            from meshpy.triangle import MeshInfo, build
         except ImportError:
             print("MeshPy is not installed. This might lead to errors in the mesh generation if used for PDE simulations.")
             return None, None

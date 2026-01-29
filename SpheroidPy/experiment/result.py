@@ -1000,16 +1000,14 @@ class Result:
                             x_plot = x
                             mean_plot = mean_array
                             std_plot = std_array
-                        
-                        fill_color = plot_color if plot_color else 'gray'
-                        line_color = plot_color if plot_color else 'black'
+
                         
                         plt.fill_between(x_plot,
                                        mean_plot - std_plot,
                                        mean_plot + std_plot,
                                        alpha=0.3,
-                                       color=fill_color)
-                        plt.plot(x_plot, mean_plot, 'o-', label=label, color=line_color)
+                                       color='grey')
+                        plt.plot(x_plot, mean_plot, 'o-', label=label)
             else:
                 # Fallback for non-MultiIndex columns (shouldn't happen with mean=True, but handle it)
                 for col in df.columns:
@@ -1104,8 +1102,8 @@ class Result:
         plt.title(f'{name} over time - {self.name}' + (' (mean ± std)' if mean else ''))
         
         # Only show legend if not too many series
-        if not mean or len(df.columns.get_level_values(0).unique()) < 10:
-            plt.legend()
+        #if not mean or len(df.columns.get_level_values(0).unique()) < 10:
+        plt.legend()
         
         plt.tight_layout()
         plt.show()
