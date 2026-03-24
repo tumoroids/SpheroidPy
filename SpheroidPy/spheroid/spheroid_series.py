@@ -9,11 +9,11 @@ import ipywidgets as widgets
 from IPython.display import display
 import numpy as np
 from tqdm import tqdm
-from matplotlib.colors import Normalize
+from matplotlib.colors import Normalize, TwoSlopeNorm, LinearSegmentedColormap
 import h5py
 import pandas as pd
 import base64
-from typing import Optional
+from typing import Optional, Callable
 from matplotlib.legend_handler import HandlerTuple
 from matplotlib.lines import Line2D
 
@@ -517,10 +517,33 @@ class SpheroidSeries:
                 period_group = periods_group.create_group(name)
                 period_group.attrs['start_time'] = period.start_time.isoformat()
                 period_group.attrs['end_time'] = period.end_time.isoformat()
-                period_group.attrs['created_at'] = period.created_at.isoformat()
-                period_group.attrs['modified_at'] = period.modified_at.isoformat()
+                
+                # Save created_at and modified_at if they exist
+                if hasattr(period, 'created_at') and period.created_at:
+                    period_group.attrs['created_at'] = period.created_at.isoformat()
+                if hasattr(period, 'modified_at') and period.modified_at:
+                    period_group.attrs['modified_at'] = period.modified_at.isoformat()
+                
                 if period.description:
                     period_group.attrs['description'] = period.description
+                
+                # Save exclude list if present
+                if period.exclude:
+                    exclude_group = period_group.create_group('exclude')
+                    for idx, ex in enumerate(period.exclude):
+                        if isinstance(ex, datetime):
+                            # Single timestamp
+                            exclude_group.create_dataset(f'{idx}', data=ex.isoformat().encode('utf-8'))
+                            exclude_group[f'{idx}'].attrs['type'] = 'datetime'
+                        elif isinstance(ex, tuple):
+                            # Time range tuple
+                            start, end = ex
+                            exclude_item_group = exclude_group.create_group(f'{idx}')
+                            exclude_item_group.attrs['type'] = 'range'
+                            if start:
+                                exclude_item_group.attrs['start'] = start.isoformat()
+                            if end:
+                                exclude_item_group.attrs['end'] = end.isoformat()
 
     def load_time_periods_from_hdf5(self):
         """Load time periods from HDF5 file."""
@@ -537,19 +560,42 @@ class SpheroidSeries:
                     # Load time period attributes
                     start_time = datetime.fromisoformat(period_group.attrs['start_time'])
                     end_time = datetime.fromisoformat(period_group.attrs['end_time'])
-                    created_at = datetime.fromisoformat(period_group.attrs['created_at'])
-                    modified_at = datetime.fromisoformat(period_group.attrs['modified_at'])
                     description = period_group.attrs.get('description', None)
+                    
+                    # Load exclude list if present
+                    exclude_list = []
+                    if 'exclude' in period_group:
+                        exclude_group = period_group['exclude']
+                        # Sort keys to maintain order
+                        exclude_keys = sorted(exclude_group.keys(), key=lambda x: int(x) if x.isdigit() else 0)
+                        for key in exclude_keys:
+                            exclude_item = exclude_group[key]
+                            if exclude_item.attrs.get('type') == 'datetime':
+                                # Single timestamp
+                                exclude_str = exclude_item[()].decode('utf-8') if isinstance(exclude_item[()], bytes) else exclude_item[()]
+                                exclude_list.append(datetime.fromisoformat(exclude_str))
+                            elif exclude_item.attrs.get('type') == 'range':
+                                # Time range tuple
+                                start = exclude_item.attrs.get('start')
+                                end = exclude_item.attrs.get('end')
+                                start_dt = datetime.fromisoformat(start) if start else None
+                                end_dt = datetime.fromisoformat(end) if end else None
+                                exclude_list.append((start_dt, end_dt))
                     
                     # Create TimePeriod instance
                     period = TimePeriod(
                         name=name,
                         start_time=start_time,
                         end_time=end_time,
-                        description=description
+                        description=description,
+                        exclude=exclude_list
                     )
-                    period.created_at = created_at
-                    period.modified_at = modified_at
+                    
+                    # Load created_at and modified_at if they exist
+                    if 'created_at' in period_group.attrs:
+                        period.created_at = datetime.fromisoformat(period_group.attrs['created_at'])
+                    if 'modified_at' in period_group.attrs:
+                        period.modified_at = datetime.fromisoformat(period_group.attrs['modified_at'])
                     
                     self.time_periods[name] = period
 
@@ -718,44 +764,24 @@ class SpheroidSeries:
         else:
             self._period_cache.pop(period_name, None)
 
-    def solve(self, model, timeperiod: str | None = None, **params):
-        """
-        ...
-
-        Parameters
-        ----------
-        model: spheroid.models
-            Model to solve for. .... .
-        timeperoid: str
-            Text
-        metric_..: dict
-            text of which series feature should be fittet and with which metric name it should be fittet (e.g. {model.fit_series.outer_radius : 'radius', model.fit_series.necrotic_radius: 'necrotic'}). 
-            If one fit_series that would be beneficially required is not specified here, it is tried to fit the model without this additional data. (CAVE: It is important to keep in mind, that this)
-        **params:
-            addational parameters to übergeben. For information on whihch parametrers can be specified, please have a look at the respective model in spheroid.models.
-
-
-        Notes
-        -----
-        - ...
-        """
-        # TODO: Implement model solving logic
-        # This would involve:
-        # 1. Getting the appropriate time range (either full series or timeperiod)
-        # 2. Extracting relevant metrics from the series
-        # 3. Passing data to the model
-        # 4. Returning model results
-        #raise NotImplementedError("Model solving not yet implemented")
-
-        return model
-
-    def solve_ward_and_king(self, timeperiod: str | None = None, **params):
-        """
-        Solve the Ward and King model for the spheroid series.
-        """
-        return 'Hi'
-
-    def export_video(self, channel: str = 'brightfield', overlay_channels: list[str] = [], increases: list[str] = [], video_name: str = 'test.mp4', scalebar: bool = True, fps: int = 5, contour: bool = True, time: bool = True, exclude_out_of_contour: bool = True, diffusion_dict: dict = {}):
+    def export_video(
+        self,
+        channel: str = 'brightfield',
+        overlay_channels: list[str] = [],
+        increases: list[str] = [],
+        video_name: str = 'test.mp4',
+        scalebar: bool = True,
+        fps: int = 5,
+        contour: bool = True,
+        time: bool = True,
+        exclude_out_of_contour: bool = True,
+        diffusion_dict: dict = {},
+        time_period: str | None = None,
+        include_metric: str | None = None,
+        metric_dict: dict | None = None,
+        discard_non_conotour_images: bool = True,
+        ax_metric=None,
+    ):
         """
         Exports the spheroid series images to a video.
 
@@ -763,29 +789,655 @@ class SpheroidSeries:
         :param channel: Channel to export (default: brightfield)
         :param overlay: other channels/contours/fields, that get overlayed (default: none)
         :param format: format of the video (default: ???)
+        :param time_period: Optional name of a time period (created via time_period()).
+                            If provided, only images within that time period are exported.
+        :param include_metric: Optional metric name (e.g. 'radius', 'area', 'fluorescence_green_mean').
+                               If provided, a metric plot panel is rendered to the right of the image
+                               (grey curve + moving orange point), similar to the default plot shown in show().
+        :param metric_dict: Optional dict to further specify metric rendering & calculation.
+                            Supported keys (all optional):
+                              - 'metric_name': override include_metric (string)
+                              - 'ignore_border': bool (passed to SpheroidImage.metric)
+                              - 'interpolate': bool (default False)
+                              - 'plot_width_ratio': float (default 1.0, width of plot panel relative to image width)
+                              - 'line_color': matplotlib color (default 'grey')
+                              - 'point_color': matplotlib color (default '#e29266')
+                              - 'dpi': int (default 100)
+        :param ax_metric: Optional matplotlib Axes to use for the metric panel.
+                          If provided, export_video will draw/update the moving orange point on this Axes
+                          (you can pre-style it, pre-plot the curve, set limits, etc.), then render the Axes'
+                          Figure canvas into the video panel each frame.
+        :param discard_non_conotour_images: If True, skip frames where no contour is available.
+                                            (Name kept for backward compatibility with existing notebooks.)
         :return:
         """
         # Initialisierung
         video = None
         time_0 = None
 
+        # Optional: restrict exported frames to a named time period
+        if time_period is not None:
+            images_dict = self.get_images_in_period(time_period)
+        else:
+            images_dict = self.spheroid_image_dict
+
+        if not images_dict:
+            print("No images to export.")
+            return
+
+        if discard_non_conotour_images:
+            images_dict = {
+                tp: img for tp, img in images_dict.items()
+                if getattr(img, "contour", None) is not None
+            }
+            if not images_dict:
+                print("No images with contour available to export.")
+                return
+
+        # Normalize metric options
+        metric_dict = metric_dict or {}
+        metric_name = metric_dict.get("metric_name", include_metric)
+        ignore_border = bool(metric_dict.get("ignore_border", False))
+        interpolate_metric = bool(metric_dict.get("interpolate", False))
+        plot_width_ratio = float(metric_dict.get("plot_width_ratio", 1.0))
+        line_color = metric_dict.get("line_color", "grey")
+        point_color = metric_dict.get("point_color", "#e29266")
+        plot_dpi = int(metric_dict.get("dpi", 100))
+        # Optional: style controls for the metric panel rendering
+        # - style: matplotlib style name or list of style names
+        # - rcParams: dict of matplotlib rcParams overrides (applied only for panel render)
+        # - curve_kwargs: kwargs passed to ax.plot() for the grey curve
+        # - point_kwargs: kwargs passed to ax.plot() for the moving point
+        # - grid_kwargs: kwargs passed to ax.grid()
+        # - xlabel/ylabel: override axis labels
+        mpl_style = metric_dict.get("style", None)
+        mpl_rcparams = metric_dict.get("rcParams", None)
+        curve_kwargs = dict(metric_dict.get("curve_kwargs", {}) or {})
+        point_kwargs = dict(metric_dict.get("point_kwargs", {}) or {})
+        grid_kwargs = dict(metric_dict.get("grid_kwargs", {}) or {})
+        xlabel_override = metric_dict.get("xlabel", None)
+        ylabel_override = metric_dict.get("ylabel", None)
+        # Global readability scaling for metric panels (applied to both generic metrics and necrotic_core)
+        panel_scale = float(metric_dict.get("scale", 1.6))
+        legend_fontsize = float(metric_dict.get("legend_fontsize", 11)) * panel_scale
+        panel_gap_px = int(metric_dict.get("panel_gap_px", 25))  # padding between image and plot panel
+
+        # Pre-compute metric series once (for the plot panel), if requested
+        metric_times_days = None
+        metric_values = None
+        metric_df = None
+        # Special metric: necrotic core (outer radius + necrotic radius)
+        necrotic_series = None  # dict with keys: time(days), outer_radius, necrotic_radius
+        if metric_name is not None:
+            try:
+                # Special-case: necrotic core plot panel uses necrotic_radius() data,
+                # not the generic metric() dataframe.
+                if str(metric_name).lower() in ("necrotic_core", "necrotic_radius", "necroticcore"):
+                    # Allow configuring necrotic computation via metric_dict
+                    nec_kwargs = dict(metric_dict.get("necrotic_kwargs", {}) or {})
+                    # Defaults mirror necrotic_radius() signature; plot is always False here
+                    nec_channel = nec_kwargs.pop("channel", metric_dict.get("channel", "red"))
+                    nec_thr = float(nec_kwargs.pop("thr", metric_dict.get("thr", 0.5)))
+                    nec_smoothing = float(nec_kwargs.pop("smoothing", metric_dict.get("smoothing", 2)))
+                    nec_fit = bool(nec_kwargs.pop("fit", False))  # we don't need fits for the panel
+                    nec_use_mp = bool(nec_kwargs.pop("use_multiprocessing", True))
+                    nec_result = self.necrotic_radius(
+                        channel=nec_channel,
+                        plot=False,
+                        time_period=time_period,
+                        smoothing=nec_smoothing,
+                        thr=nec_thr,
+                        use_multiprocessing=nec_use_mp,
+                        fit=nec_fit,
+                        **nec_kwargs,
+                    )
+                    necrotic_series = nec_result
+                    # We'll use this as our "metric panel"; keep metric_name as 'necrotic_core'
+                    metric_name = "necrotic_core"
+                else:
+                    # Use the existing metric() machinery so we stay consistent with SpheroidImage.metric()
+                    # NOTE: metric() index is relative hours; convert to days for plotting.
+                    metric_df = self.metric(
+                        name=str(metric_name),
+                        time_period=time_period,
+                        interpolate=interpolate_metric,
+                        ignore_border=ignore_border,
+                        plot=False,
+                    )
+                    metric_times_days = np.asarray(metric_df.index, dtype=float) / 24.0
+                    # For MultiIndex fluorescence without kind, plot the 'mean' column if present.
+                    if isinstance(metric_df.columns, pd.MultiIndex):
+                        try:
+                            metric_values = metric_df.xs('mean', level=1, axis=1).iloc[:, 0].to_numpy(dtype=float)
+                        except Exception:
+                            metric_values = metric_df.iloc[:, 0].to_numpy(dtype=float)
+                    else:
+                        metric_values = metric_df.iloc[:, 0].to_numpy(dtype=float)
+            except Exception as e:
+                print(f"Warning: could not compute metric '{metric_name}' for export_video(): {e}")
+                metric_name = None
+
+        # Central gating: only widen video AND render panel when we actually have panel data
+        has_metric_panel = (
+            metric_name is not None
+            and (
+                (metric_times_days is not None and metric_values is not None)
+                or (str(metric_name).lower() == "necrotic_core" and necrotic_series is not None)
+            )
+        )
+
+        # If a custom Axes is provided for the metric panel, prepare artists once and only update per frame.
+        metric_ax = None
+        metric_fig = None
+        metric_point_artist = None
+        metric_unit = ""
+        if metric_name is not None:
+            if str(metric_name).lower() == "area":
+                metric_unit = "µm²"
+            elif str(metric_name).lower() == "radius":
+                metric_unit = "µm"
+
+        if metric_name is not None and ax_metric is not None:
+            try:
+                import matplotlib
+                from matplotlib.axes import Axes as _MplAxes
+                from matplotlib.figure import Figure as _MplFigure
+                from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+                if isinstance(ax_metric, _MplAxes):
+                    metric_ax = ax_metric
+                    metric_fig = metric_ax.figure
+                elif isinstance(ax_metric, _MplFigure):
+                    metric_fig = ax_metric
+                    # take first axes if exists, else create one
+                    metric_ax = metric_fig.axes[0] if metric_fig.axes else metric_fig.add_subplot(1, 1, 1)
+                else:
+                    metric_ax = None
+                    metric_fig = None
+
+                if metric_fig is not None:
+                    # Ensure Agg canvas so we can read RGB buffer reliably
+                    FigureCanvasAgg(metric_fig)
+
+                # If the user didn't pre-plot anything, we plot the grey curve like show()
+                if metric_ax is not None and (not metric_ax.lines) and metric_times_days is not None and metric_values is not None:
+                    metric_ax.plot(metric_times_days, metric_values, color=line_color, zorder=5)
+
+                # Create a point artist we will update per frame
+                if metric_ax is not None:
+                    (metric_point_artist,) = metric_ax.plot(
+                        [np.nan],
+                        [np.nan],
+                        marker=".",
+                        linestyle="None",
+                        markersize=10,
+                        color=point_color,
+                        zorder=6,
+                        label="",
+                    )
+            except Exception as e:
+                print(f"Warning: ax_metric could not be initialized and will be ignored: {e}")
+                metric_ax = None
+                metric_fig = None
+                metric_point_artist = None
+
+        def _render_metric_panel(current_time_days: float, current_value: float | None, panel_h: int, panel_w: int) -> np.ndarray:
+            """
+            Render a metric plot panel (RGB) with grey curve and moving orange point.
+            Output shape: (panel_h, panel_w, 3) uint8, RGB.
+            """
+            import matplotlib
+            import matplotlib.pyplot as _plt
+
+            def _canvas_to_rgb(canvas) -> np.ndarray:
+                """Return canvas buffer as RGB across Matplotlib versions."""
+                w, h = canvas.get_width_height()
+                if hasattr(canvas, "tostring_rgb"):
+                    rgb_buf = canvas.tostring_rgb()
+                    return np.frombuffer(rgb_buf, dtype=np.uint8).reshape((h, w, 3))
+                # Matplotlib versions that only expose RGBA buffer
+                rgba = np.asarray(canvas.buffer_rgba(), dtype=np.uint8).reshape((h, w, 4))
+                return rgba[:, :, :3]
+
+            # If a user-provided ax_metric exists, update it and render its canvas
+            if metric_ax is not None and metric_fig is not None and metric_point_artist is not None:
+                try:
+                    # Update moving point + legend label like show()
+                    if current_value is not None and not np.isnan(current_value):
+                        metric_point_artist.set_data([current_time_days], [current_value])
+                        unit_part = f" {metric_unit}" if metric_unit else ""
+                        metric_point_artist.set_label(f"{float(current_value):.1f}{unit_part} @ {float(current_time_days):.2f} d")
+                        metric_ax.legend()
+                    else:
+                        metric_point_artist.set_data([np.nan], [np.nan])
+
+                    metric_fig.tight_layout()
+                    metric_fig.canvas.draw()
+                    rgb = _canvas_to_rgb(metric_fig.canvas)
+                    # Resize to desired panel size if needed
+                    if rgb.shape[0] != panel_h or rgb.shape[1] != panel_w:
+                        rgb = cv2.resize(rgb, (panel_w, panel_h), interpolation=cv2.INTER_AREA)
+                    return rgb
+                except Exception:
+                    # Fall through to default render if something goes wrong
+                    pass
+
+            fig_w = max(1, panel_w) / max(1, plot_dpi)
+            fig_h = max(1, panel_h) / max(1, plot_dpi)
+
+            # Render inside a style/rcParams context (optional)
+            style_ctx = _plt.style.context(mpl_style) if mpl_style is not None else _plt.style.context([])
+            rc_ctx = matplotlib.rc_context(mpl_rcparams) if isinstance(mpl_rcparams, dict) else matplotlib.rc_context()
+            with style_ctx, rc_ctx:
+                fig, ax = _plt.subplots(figsize=(fig_w, fig_h), dpi=plot_dpi)
+
+                # --- Special metric panel: necrotic_core (outer + necrotic radius) ---
+                if metric_name is not None and str(metric_name).lower() == "necrotic_core" and necrotic_series is not None:
+                    from matplotlib.colors import LinearSegmentedColormap
+
+                    # Match necrotic_radius() plot "feel" (axes/legend/grid),
+                    # but keep the soft gradient-line aesthetic from the user's snippet.
+                    # Global scale-up for readability in video panels (fonts, ticks, markers, linewidths)
+                    scale = panel_scale
+
+                    title = metric_dict.get("title", "Necrotic Radius")
+                    grid_alpha = float(metric_dict.get("grid_alpha", 0.3))
+                    label_fs = float(metric_dict.get("label_fontsize", 14)) * scale
+                    title_fs = float(metric_dict.get("title_fontsize", 16)) * scale
+                    tick_fs = float(metric_dict.get("tick_fontsize", 11)) * scale
+
+                    # Colors (dark -> light)
+                    outer_dark = metric_dict.get("outer_dark", "#4b4b4b")
+                    outer_light = metric_dict.get("outer_light", "#cfcfcf")
+                    nec_dark = metric_dict.get("necrotic_dark", "#B71C1C")
+                    nec_light = metric_dict.get("necrotic_light", "#EF9A9A")
+
+                    # Point styling
+                    ms = float(metric_dict.get("marker_size", 8)) * scale
+                    mew = float(metric_dict.get("marker_edgewidth", 2.0)) * scale
+                    points_alpha = float(metric_dict.get("points_alpha", 0.55))
+                    current_alpha = float(metric_dict.get("current_alpha", 0.95))
+
+                    # Line styling (gradient segments)
+                    grad_lw = float(metric_dict.get("grad_lw", 6.0)) * scale
+                    grad_alpha = float(metric_dict.get("grad_alpha", 0.07))
+
+                    def _plot_gradient(ax_, x, y, c1, c2, lw=6, alpha=0.07, zorder=1):
+                        cmap = LinearSegmentedColormap.from_list("grad", [c1, c2])
+                        norm = _plt.Normalize(float(np.nanmin(x)), float(np.nanmax(x)))
+                        for ii in range(len(x) - 1):
+                            ax_.plot(
+                                x[ii:ii+2],
+                                y[ii:ii+2],
+                                color=cmap(norm(x[ii])),
+                                linewidth=lw,
+                                solid_capstyle="round",
+                                alpha=alpha,
+                                zorder=zorder,
+                            )
+
+                    # Extract time + radii
+                    t_days = np.asarray(necrotic_series.get("time", []), dtype=float)
+                    outer = np.asarray(necrotic_series.get("outer_radius", []), dtype=float)
+                    nec = np.asarray(necrotic_series.get("necrotic_radius", []), dtype=float)
+                    fit_params = necrotic_series.get("fit_parameters") if isinstance(necrotic_series, dict) else None
+                    has_any_fit = isinstance(fit_params, dict) and (
+                        fit_params.get("outer_radius") is not None
+                        or fit_params.get("necrotic_radius") is not None
+                    )
+                    # Default behavior: if fit is present, don't connect datapoints with lines.
+                    connect_points_with_fit = bool(metric_dict.get("connect_points_with_fit", False))
+                    show_data_connections = (not has_any_fit) or connect_points_with_fit
+                    fit_grad_lw = float(metric_dict.get("fit_grad_lw", grad_lw * 1.35))
+                    fit_grad_alpha = float(metric_dict.get("fit_grad_alpha", max(0.12, grad_alpha * 2.2)))
+                    fit_line_lw = float(metric_dict.get("fit_line_lw", max(2.5, 2.8 * scale)))
+                    fit_line_alpha = float(metric_dict.get("fit_line_alpha", 0.92))
+                    draw_fit_foreground_line = bool(metric_dict.get("fit_foreground_line", False))
+                    # Optional thin dark-red overlay line for outer + nec fits (without connecting datapoints)
+                    plotstyle = metric_dict.get("plotstyle", None)
+                    fit_overlay_style = metric_dict.get("fit_overlay_style", None)
+                    _plotstyle_str = str(plotstyle or fit_overlay_style or "").lower()
+                    draw_fit_thin_dark_red_overlay = _plotstyle_str in (
+                        "thin_dark_red",
+                        "darkred_thin",
+                        "dark_red_thin",
+                        "fit_thin_dark_red",
+                    )
+                    # Match style from _plot_necrotic_radius_series(): dashed fit lines
+                    # - outer fit: '#555555' (grey)
+                    # - nec fit:   '#aa0000' (dark red)
+                    thin_overlay_lw = float(metric_dict.get("fit_thin_overlay_lw", max(1.1, 1.8 * scale)))
+                    thin_overlay_alpha = float(metric_dict.get("fit_thin_overlay_alpha", 0.99))
+                    thin_overlay_linestyle = metric_dict.get("fit_thin_overlay_linestyle", "--")
+                    thin_overlay_color_outer = metric_dict.get("fit_thin_overlay_color_outer", "#555555")
+                    thin_overlay_color_nec = metric_dict.get("fit_thin_overlay_color_nec", "#aa0000")
+
+                    # Keep finite values only for plotting points/lines
+                    valid_outer = np.isfinite(t_days) & np.isfinite(outer)
+                    valid_nec = np.isfinite(t_days) & np.isfinite(nec)
+
+                    # Outer radius (gradient line + transparent points)
+                    scat_outer = None
+                    if valid_outer.sum() >= 2:
+                        x = t_days[valid_outer]
+                        y = outer[valid_outer]
+                        if show_data_connections:
+                            _plot_gradient(ax, x, y, outer_dark, outer_light, lw=grad_lw, alpha=grad_alpha, zorder=1)
+                        outer_line_handle, = ax.plot([], [], color=outer_dark, linewidth=2, label="Outer radius")  # legend handle
+                        scat_outer, = ax.plot(
+                            x,
+                            y,
+                            "o",
+                            markersize=ms,
+                            markerfacecolor=outer_light,
+                            markeredgecolor=outer_dark,
+                            markeredgewidth=mew,
+                            alpha=points_alpha,
+                            zorder=5,
+                        )
+
+                    # Necrotic core (gradient line + transparent points)
+                    scat_nec = None
+                    if valid_nec.sum() >= 2:
+                        x = t_days[valid_nec]
+                        y = nec[valid_nec]
+                        if show_data_connections:
+                            _plot_gradient(ax, x, y, nec_dark, nec_light, lw=grad_lw, alpha=grad_alpha, zorder=1)
+                        nec_line_handle, = ax.plot([], [], color=nec_dark, linewidth=2, label="Necrotic radius")  # legend handle
+                        scat_nec, = ax.plot(
+                            x,
+                            y,
+                            "o",
+                            markersize=ms,
+                            markerfacecolor=nec_light,
+                            markeredgecolor=nec_dark,
+                            markeredgewidth=mew,
+                            alpha=points_alpha,
+                            zorder=5,
+                        )
+
+                    # Optional fit overlays: thick, soft background line + crisp foreground line.
+                    if isinstance(fit_params, dict) and t_days.size > 1:
+                        try:
+                            t_fit = np.linspace(float(np.nanmin(t_days)), float(np.nanmax(t_days)), 200)
+                        except Exception:
+                            t_fit = None
+                        if t_fit is not None:
+                            # Outer linear fit
+                            outer_fit = fit_params.get("outer_radius")
+                            if isinstance(outer_fit, dict) and outer_fit.get("slope") is not None and outer_fit.get("intercept") is not None:
+                                r_fit_outer = float(outer_fit["slope"]) * t_fit + float(outer_fit["intercept"])
+                                _plot_gradient(
+                                    ax, t_fit, r_fit_outer,
+                                    outer_dark, outer_light,
+                                    lw=fit_grad_lw, alpha=fit_grad_alpha, zorder=2
+                                )
+                                if draw_fit_thin_dark_red_overlay:
+                                    ax.plot(
+                                        t_fit,
+                                        r_fit_outer,
+                                        thin_overlay_linestyle,
+                                        color=thin_overlay_color_outer,
+                                        linewidth=thin_overlay_lw,
+                                        alpha=thin_overlay_alpha,
+                                        zorder=4,
+                                    )
+                                if draw_fit_foreground_line:
+                                    ax.plot(
+                                        t_fit,
+                                        r_fit_outer,
+                                        "-",
+                                        color=outer_dark,
+                                        linewidth=fit_line_lw,
+                                        alpha=fit_line_alpha,
+                                        zorder=3,
+                                    )
+
+                            # Necrotic fit
+                            nec_fit = fit_params.get("necrotic_radius")
+                            if isinstance(nec_fit, dict):
+                                model_name = nec_fit.get("model", None)
+                                if model_name:
+                                    try:
+                                        fit_func = get_fit_model(model_name)
+                                        if model_name == "generic":
+                                            param_order = ["t_nec", "slope", "plateau", "a"]
+                                        elif model_name == "const_uptake":
+                                            param_order = ["R0", "v", "r_l"]
+                                        else:
+                                            param_order = []
+                                        if param_order and all(nec_fit.get(p) is not None for p in param_order):
+                                            params_list = [float(nec_fit[p]) for p in param_order]
+                                            r_fit_nec = fit_func(t_fit, *params_list)
+                                            _plot_gradient(
+                                                ax, t_fit, r_fit_nec,
+                                                nec_dark, nec_light,
+                                                lw=fit_grad_lw, alpha=fit_grad_alpha, zorder=2
+                                            )
+                                            if draw_fit_thin_dark_red_overlay:
+                                                ax.plot(
+                                                    t_fit,
+                                                    r_fit_nec,
+                                                        thin_overlay_linestyle,
+                                                    color=thin_overlay_color_nec,
+                                                    linewidth=thin_overlay_lw,
+                                                    alpha=thin_overlay_alpha,
+                                                    zorder=4,
+                                                )
+                                            if draw_fit_foreground_line:
+                                                ax.plot(
+                                                    t_fit,
+                                                    r_fit_nec,
+                                                    "-",
+                                                    color=nec_dark,
+                                                    linewidth=fit_line_lw,
+                                                    alpha=fit_line_alpha,
+                                                    zorder=3,
+                                                )
+                                    except Exception:
+                                        pass
+
+                    # Highlight current datapoints (same style, just less transparent + slightly larger)
+                    if t_days.size > 0 and np.isfinite(current_time_days):
+                        idx = int(np.nanargmin(np.abs(t_days - float(current_time_days))))
+                        cur_ms = float(metric_dict.get("current_marker_size", ms * 1.25))
+                        if idx < outer.size and np.isfinite(outer[idx]):
+                            ax.plot(
+                                t_days[idx],
+                                outer[idx],
+                                "o",
+                                markersize=cur_ms,
+                                markerfacecolor=outer_light,
+                                markeredgecolor=outer_dark,
+                                markeredgewidth=mew,
+                                alpha=current_alpha,
+                                zorder=10,
+                            )
+                        if idx < nec.size and np.isfinite(nec[idx]):
+                            ax.plot(
+                                t_days[idx],
+                                nec[idx],
+                                "o",
+                                markersize=cur_ms,
+                                markerfacecolor=nec_light,
+                                markeredgecolor=nec_dark,
+                                markeredgewidth=mew,
+                                alpha=current_alpha,
+                                zorder=10,
+                            )
+
+                    # Axes/legend like necrotic_radius()
+                    ax.set_xlabel(xlabel_override or "Time [d]", fontsize=label_fs)
+                    ax.set_ylabel(ylabel_override or "Radius [µm]", fontsize=label_fs)
+                    ax.set_title(title, fontsize=title_fs)
+                    ax.grid(True, alpha=grid_alpha)
+                    ax.tick_params(axis="both", labelsize=tick_fs)
+                    # Thicker spines for readability
+                    spine_lw = float(metric_dict.get("spine_linewidth", 2.0)) * scale
+                    for sp in ("left", "bottom"):
+                        try:
+                            ax.spines[sp].set_linewidth(spine_lw)
+                        except Exception:
+                            pass
+                    # Legend structure like necrotic_radius(): add a combined datapoints entry
+                    try:
+                        from matplotlib.legend_handler import HandlerTuple
+                        from matplotlib.lines import Line2D
+
+                        handles, labels = ax.get_legend_handles_labels()
+
+                        # Build the combined datapoints handle (outer / nec)
+                        if scat_outer is not None and scat_nec is not None:
+                            slash = Line2D([0], [0], marker=r'$\!/\!$', color='#777777',
+                                           linestyle='None', markersize=max(6.0, 7.0 * scale))
+                            handles.append((scat_outer, slash, scat_nec))
+                            labels.append("Datapoints")
+
+                            ax.legend(
+                                handles,
+                                labels,
+                                loc="best",
+                                fontsize=legend_fontsize,
+                                handler_map={tuple: HandlerTuple(ndivide=None)},
+                            )
+                        else:
+                            ax.legend(loc="best", fontsize=legend_fontsize)
+                    except Exception:
+                        ax.legend(loc="best", fontsize=legend_fontsize)
+
+                    # Limits: keep user overrides if provided
+                    if "xlim" in metric_dict:
+                        ax.set_xlim(*metric_dict["xlim"])
+                    else:
+                        if np.isfinite(t_days).any():
+                            ax.set_xlim(float(np.nanmin(t_days)), float(np.nanmax(t_days)))
+                    if "ylim" in metric_dict:
+                        ax.set_ylim(*metric_dict["ylim"])
+                    else:
+                        # auto y-range from both curves
+                        y_all = np.r_[outer[np.isfinite(outer)], nec[np.isfinite(nec)]]
+                        if y_all.size:
+                            y0 = float(np.nanmin(y_all))
+                            y1 = float(np.nanmax(y_all))
+                            pad = 0.05 * max(1e-6, (y1 - y0))
+                            ax.set_ylim(y0 - pad, y1 + pad)
+
+                    # Make plot area tight so the content/labels appear larger within the fixed panel pixels
+                    fig.tight_layout(pad=float(metric_dict.get("tight_layout_pad", 0.2)))
+                    fig.canvas.draw()
+                    rgb = _canvas_to_rgb(fig.canvas)
+                    _plt.close(fig)
+                    return rgb
+
+                # Plot the full curve (like show() default: grey line)
+                if metric_times_days is not None and metric_values is not None and len(metric_times_days) == len(metric_values):
+                    # Apply scaling for generic metric panels too
+                    scale = panel_scale
+                    label_fs = float(metric_dict.get("label_fontsize", 14)) * scale
+                    title_fs = float(metric_dict.get("title_fontsize", 14)) * scale
+                    tick_fs = float(metric_dict.get("tick_fontsize", 11)) * scale
+                    spine_lw = float(metric_dict.get("spine_linewidth", 2.0)) * scale
+
+                    # Curve style defaults (show() uses grey line)
+                    _curve_kwargs = {
+                        "color": line_color,
+                        "zorder": 5,
+                        "linewidth": float(metric_dict.get("curve_linewidth", 2.0)) * scale,
+                    }
+                    _curve_kwargs.update(curve_kwargs)
+                    ax.plot(metric_times_days, metric_values, **_curve_kwargs)
+
+                    # Orange moving point with legend label like show()
+                    if current_value is not None and not np.isnan(current_value):
+                        # Unit hint (match show() label behaviour)
+                        if str(metric_name).lower() == "area":
+                            unit = "µm²"
+                        elif str(metric_name).lower() == "radius":
+                            unit = "µm"
+                        else:
+                            unit = ""
+                        unit_part = f" {unit}" if unit else ""
+                        point_label = f"{current_value:.1f}{unit_part} @ {current_time_days:.2f} d"
+
+                        _point_kwargs = {
+                            "marker": ".",
+                            "linestyle": "None",
+                            "markersize": float(metric_dict.get("current_marker_size", 10)) * scale,
+                            "color": point_color,
+                            "zorder": 6,
+                            "label": point_label,
+                        }
+                        _point_kwargs.update(point_kwargs)
+                        ax.plot(current_time_days, current_value, **_point_kwargs)
+                        # In show(), legend is only shown if current_val exists
+                        ax.legend(fontsize=legend_fontsize)
+
+                    # Set xlim with small margins (match show() feel)
+                    try:
+                        ax.set_xlim(float(np.nanmin(metric_times_days)) - 0.3, float(np.nanmax(metric_times_days)) + 0.2)
+                    except Exception:
+                        pass
+                else:
+                    ax.text(0.5, 0.5, "No metric data", ha="center", va="center")
+
+                # Grid (match show() default alpha=0.3)
+                _grid_kwargs = {"alpha": 0.3}
+                _grid_kwargs.update(grid_kwargs)
+                ax.grid(True, **_grid_kwargs)
+
+                # Labels/ticks/spines (scaled)
+                ax.set_xlabel(xlabel_override or "Time [d]", fontsize=float(metric_dict.get("label_fontsize", 14)) * panel_scale)
+                if ylabel_override is not None:
+                    ax.set_ylabel(str(ylabel_override), fontsize=float(metric_dict.get("label_fontsize", 14)) * panel_scale)
+                else:
+                    # Simple ylabel heuristic
+                    if str(metric_name).lower() == "area":
+                        ax.set_ylabel("Area [µm²]", fontsize=float(metric_dict.get("label_fontsize", 14)) * panel_scale)
+                    elif str(metric_name).lower() == "radius":
+                        ax.set_ylabel("Radius [µm]", fontsize=float(metric_dict.get("label_fontsize", 14)) * panel_scale)
+                    else:
+                        ax.set_ylabel(str(metric_name), fontsize=float(metric_dict.get("label_fontsize", 14)) * panel_scale)
+
+                ax.tick_params(axis="both", labelsize=float(metric_dict.get("tick_fontsize", 11)) * panel_scale)
+                for sp in ("left", "bottom"):
+                    try:
+                        ax.spines[sp].set_linewidth(float(metric_dict.get("spine_linewidth", 2.0)) * panel_scale)
+                    except Exception:
+                        pass
+
+                fig.tight_layout()
+                fig.canvas.draw()
+                rgb = _canvas_to_rgb(fig.canvas)
+                _plt.close(fig)
+                return rgb
+
         # Iteriere durch die Zeitstempel und Bilder
-        for i, (time_key, spheroid) in enumerate(tqdm(self.spheroid_image_dict.items(), desc="Processing Images")):
+        for i, (time_key, spheroid) in enumerate(tqdm(images_dict.items(), desc="Processing Images")):
             # Lade das Bild basierend auf dem Kanal
-            spheroid = self.spheroid_image_dict[time_key]
+            spheroid = images_dict[time_key]
             base_image_array = cv2.imread(str(spheroid.image_path_dict[channel]))[1:-1]
 
             if base_image_array is None:
                 print(f"Warnung: Bild konnte nicht geladen werden: {spheroid.image_path_dict[channel]}")
                 continue
 
-            # Konvertiere den Zeitstempel in ein datetime-Objekt
-            time_key_dt = datetime.strptime(time_key, "%Y-%m-%d %H:%M:%S")
+            # Konvertiere den Zeitstempel in ein datetime-Objekt (Keys können str oder datetime sein)
+            def _ensure_dt(val):
+                return val if isinstance(val, datetime) else datetime.strptime(str(val), "%Y-%m-%d %H:%M:%S")
+
+            time_key_dt = _ensure_dt(time_key)
 
             # Initialisiere das Video beim ersten Durchlauf
             if video is None:
                 height, width = base_image_array.shape[:2]
-                video = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'XVID'), fps, (width, height))
+                # If including metric panel, video width increases
+                if has_metric_panel:
+                    panel_w = int(width * max(plot_width_ratio, 0.2))
+                    out_w = width + panel_gap_px + panel_w
+                    out_h = height
+                else:
+                    out_w, out_h = width, height
+                video = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'XVID'), fps, (out_w, out_h))
                 time_0 = time_key_dt
 
             # Erstelle eine Kopie des Basisbilds für Overlays
@@ -870,8 +1522,13 @@ class SpheroidSeries:
 
                     # Matplotlib-Plot in ein OpenCV-kompatibles Bild umwandeln
                     fig.canvas.draw()
-                    plot_image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-                    plot_image = plot_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+                    if hasattr(fig.canvas, "tostring_rgb"):
+                        plot_image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+                        plot_image = plot_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+                    else:
+                        w_c, h_c = fig.canvas.get_width_height()
+                        rgba = np.asarray(fig.canvas.buffer_rgba(), dtype=np.uint8).reshape((h_c, w_c, 4))
+                        plot_image = rgba[:, :, :3]
                     combined_image = cv2.cvtColor(plot_image, cv2.COLOR_RGB2BGR)
 
             if scalebar:
@@ -899,8 +1556,53 @@ class SpheroidSeries:
                 text_y = y_start - 30
                 cv2.putText(combined_image, scale_text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
 
+            # Optional: append metric panel to the right (like show() default)
+            if has_metric_panel:
+                try:
+                    # Determine current time/value for orange point.
+                    # Prefer the closest metric time to this frame's time (in days).
+                    current_days = (time_key_dt - time_0).total_seconds() / 86400.0
+                    # necrotic_core: use necrotic_series to pick current value (outer radius for label)
+                    if str(metric_name).lower() == "necrotic_core" and necrotic_series is not None:
+                        t_days = np.asarray(necrotic_series.get("time", []), dtype=float)
+                        outer = np.asarray(necrotic_series.get("outer_radius", []), dtype=float)
+                        if t_days.size > 0:
+                            idx_closest = int(np.nanargmin(np.abs(t_days - current_days)))
+                            current_time_days = float(t_days[idx_closest])
+                            current_value = float(outer[idx_closest]) if idx_closest < outer.size and np.isfinite(outer[idx_closest]) else None
+                        else:
+                            current_time_days = float(current_days)
+                            current_value = None
+                    else:
+                        if metric_times_days is not None and len(metric_times_days) > 0:
+                            idx_closest = int(np.nanargmin(np.abs(metric_times_days - current_days)))
+                            current_value = float(metric_values[idx_closest]) if metric_values is not None else None
+                            current_time_days = float(metric_times_days[idx_closest])
+                        else:
+                            current_time_days = float(current_days)
+                            current_value = None
+
+                    panel_w = int(width * max(plot_width_ratio, 0.2))
+                    panel_h = height
+                    panel_rgb = _render_metric_panel(current_time_days, current_value, panel_h, panel_w)
+                    panel_bgr = cv2.cvtColor(panel_rgb, cv2.COLOR_RGB2BGR)
+                    # Ensure panel height matches
+                    if panel_bgr.shape[0] != combined_image.shape[0]:
+                        panel_bgr = cv2.resize(panel_bgr, (panel_w, combined_image.shape[0]), interpolation=cv2.INTER_AREA)
+                    gap = np.zeros((combined_image.shape[0], panel_gap_px, 3), dtype=np.uint8)
+                    frame_out = np.concatenate([combined_image, gap, panel_bgr], axis=1)
+                except Exception as e:
+                    print(f"Warning: failed to render metric panel for frame {time_key}: {e}")
+                    # Keep dimensions consistent with VideoWriter: append blank panel
+                    panel_w = int(width * max(plot_width_ratio, 0.2))
+                    blank_panel = np.zeros((combined_image.shape[0], panel_w, 3), dtype=np.uint8)
+                    gap = np.zeros((combined_image.shape[0], panel_gap_px, 3), dtype=np.uint8)
+                    frame_out = np.concatenate([combined_image, gap, blank_panel], axis=1)
+            else:
+                frame_out = combined_image
+
             # Schreibe das Bild ins Video
-            video.write(combined_image)
+            video.write(frame_out)
 
         # Beende das Video und gebe Ressourcen frei
         if video is not None:
@@ -1735,30 +2437,108 @@ class SpheroidSeries:
             # If interpolation not possible or not needed, return closest value
             return metric_df.iloc[[metric_df.index.get_loc(closest_time)]]
         else:
-            # Interpolate all missing values
-            return metric_df.interpolate(method='linear', axis=0, limit_direction='both')
+            # Interpolate only between existing points; keep NaN vor dem ersten
+            # und nach dem letzten gültigen Wert bestehen.
+            return metric_df.interpolate(
+                method='linear',
+                axis=0,
+                limit_direction='both',
+                limit_area='inside',
+            )
 
     def metric(self, name: str = 'radius',
+           timepoint: float | str | datetime | None = None,
+           time_period: str | None = None,
+           interpolate: bool = False,
+           ignore_border: bool = False,
            plot: bool = False,
            skip_nan: bool = False,
-           interpolate: bool = True,
-           ignore_border: bool = True,
-           timepoint: float | str | datetime | None = None,
-           time_period: str | None = None) -> pd.DataFrame:
+           ax: Optional[plt.Axes] = None,
+           plot_kwargs: Optional[dict] = None,
+           savepath: Optional[str] = None) -> pd.DataFrame | tuple[pd.DataFrame, plt.Axes]:
         """Calculate a metric for this series and optionally plot it.
         
-        Args:
-            name: Metric to calculate ('radius', 'area', 'fluorescence_*').
-            plot: If True, draw a line plot of the metric over time.
-            skip_nan: Only affects plotting. If True, NaN points are not drawn (gaps in the curve). Data in the returned DataFrame remains unchanged.
-            interpolate: Affects the data returned. If True, missing values are linearly interpolated (or a single-row value is returned for a specific timepoint); if False, data is left as-is.
-            ignore_border: Whether to exclude spheroids touching image border (only affects fluorescence metrics).
-            timepoint: Optional specific timepoint to evaluate. Accepts relative hours, a datetime string 'YYYY-MM-DD HH:MM:SS', or a datetime.
-            time_period: Optional time period name to limit analysis to specific time range.
+        Parameters
+        ----------
+        name : str, default='radius'
+            Metric to calculate. Available options:
+            - Basic metrics: 'radius', 'area'
+            - Fluorescence metrics: 'fluorescence_green', 'fluorescence_red', 'fluorescence_blue'
+            - Fluorescence with specific type: 'fluorescence_green_mean', 'fluorescence_green_cumulative', etc.
             
-        Returns:
-            DataFrame with timepoints (relative hours) as index and one column for this series
-            (or a MultiIndex with ('cumulative', 'mean') for unspecified fluorescence kinds).
+            Use 'radius' for effective radius (sqrt(Area/π)) in μm, 'area' for area in μm².
+            For fluorescence, use base name (e.g., 'fluorescence_green') to get both cumulative and mean,
+            or add '_mean'/'_cumulative' suffix to get only one type.
+        
+        timepoint : float | str | datetime | None, default=None
+            Optional specific timepoint to evaluate. If None, returns values for all timepoints.
+            Accepted formats: float (relative time in hours), str (datetime string 'YYYY-MM-DD HH:MM:SS'),
+            or datetime object.
+        
+        time_period : str | None, default=None
+            Optional time period name to limit analysis to specific time range.
+            Must be a time period defined via ``time_period()`` method. If None, analyzes all available timepoints.
+        
+        interpolate : bool, default=True
+            Whether to interpolate missing values. If True, missing values are linearly
+            interpolated (or a single-row value is returned for a specific timepoint).
+            If False, data is left as-is with NaN values.
+        
+        ignore_border : bool, default=True
+            Whether to exclude spheroids touching image border when calculating metrics.
+            If True, spheroids that touch the image border are excluded from all metric calculations
+            (returns None/NaN). If False, metrics are calculated regardless of border contact.
+            Recommended to keep True to avoid edge artifacts.
+        
+        plot : bool, default=False
+            Whether to display a plot of the metric over time.
+        
+        skip_nan : bool, default=False
+            Only affects plotting. If True, NaN points are not drawn (creates gaps in the curve).
+            Data in the returned DataFrame remains unchanged (NaN values are still present).
+        
+        ax : Optional[plt.Axes], default=None
+            Optional matplotlib Axes object to plot on. If provided and ``plot=True``,
+            the plot will be drawn on this axes. If None and ``plot=True``, a new
+            figure with default size (6, 4) is created.
+        
+        plot_kwargs : Optional[dict], default=None
+            Optional dictionary of keyword arguments passed to ``ax.plot()`` for customizing
+            line appearance. Merged with orange default style (color='#D97706',
+            linestyle='-', linewidth=2). Keine Marker-Punkte, nur Linie.
+        
+        savepath : Optional[str], default=None
+            Optional path to save the figure. Only used if ``plot=True``.
+            Works with both internally created figures and externally provided axes.
+            Can specify any file format supported by matplotlib (PNG, PDF, SVG, etc.).
+        
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with metric values:
+            - Index: Timepoints in relative hours (from first timepoint)
+            - Columns: One column for this series (or MultiIndex with ('cumulative', 'mean') for
+              fluorescence metrics without specific type)
+            - Values: Metric values at each timepoint
+            
+            Special cases:
+            - If ``timepoint`` is specified: Returns single-row DataFrame for that timepoint
+            - If ``name='fluorescence_*'`` (without _mean/_cumulative): Returns MultiIndex columns
+              with ('cumulative', 'mean') sub-columns
+        
+        Examples
+        --------
+        >>> # Calculate radius over time
+        >>> df = series.metric('radius')
+        
+        >>> # Get radius at specific timepoint
+        >>> df = series.metric('radius', timepoint=24.0)
+        
+        >>> # Calculate fluorescence with plot
+        >>> df = series.metric('fluorescence_green_mean', plot=True)
+        
+        >>> # Use time period
+        >>> df = series.metric('radius', time_period='growth_phase')
         """
         # 1) Zeitachsen (ggf. auf Perioden eingeschränkt)
         if time_period is not None:
@@ -1777,45 +2557,58 @@ class SpheroidSeries:
             rel_times = []
         series_id = self.name.replace('Spheroid-', '')
 
-        # 2) Fluoreszenz-Parsing einmalig
+        # 2) Parse metric name to determine if it's fluorescence (for DataFrame structure)
         parts = name.split('_')
         is_fluo = (parts[0] == 'fluorescence')
-        fluo_color = parts[1] if is_fluo and len(parts) > 1 else None
-        fluo_kind = parts[2] if is_fluo and len(parts) > 2 else None  # 'mean' | 'cumulative'
+        fluo_kind = parts[2] if is_fluo and len(parts) > 2 else None  # 'mean' | 'cumulative' | None
 
-        # 3) Werte effizient sammeln
-        if not is_fluo:
-            if name == 'radius':
-                values = [images_dict[t].radius for t in timepoints]
-            elif name == 'area':
-                values = [images_dict[t].area for t in timepoints]
-            else:
-                raise ValueError(f"Unsupported metric '{name}'")
+        # 3) Werte effizient sammeln - use metric() method from SpheroidImage
+        # metric() already handles all the logic (mean/cumulative/both) and returns appropriate values
+        if not is_fluo or fluo_kind is not None:
+            # Simple metrics (radius, area) or fluorescence with specific kind (mean/cumulative)
+            # metric() returns a single value
+            values = []
+            for t in timepoints:
+                sph = images_dict[t]
+                try:
+                    val = sph.metric(name, ignore_border=ignore_border)
+                    values.append(val)
+                except ValueError:
+                    # Re-raise ValueError (invalid metric name) - don't catch it
+                    raise
+                except Exception as e:
+                    logger.warning(f"Failed to calculate metric '{name}' for timepoint {t}: {e}")
+                    values.append(None)
             df = pd.DataFrame({series_id: values}, index=rel_times)
         else:
+            # Fluorescence metrics without kind specified - metric() returns tuple (cumulative, mean)
             cum_vals, mean_vals = [], []
             for t in timepoints:
                 sph = images_dict[t]
                 try:
-                    cum_v, mean_v = sph.metric_fluorescence(fluo_color, ignore_border=ignore_border)
-                except Exception:
+                    result = sph.metric(name, ignore_border=ignore_border)
+                    # metric() returns tuple (cumulative, mean) for fluorescence without kind
+                    if isinstance(result, tuple):
+                        cum_v, mean_v = result
+                    else:
+                        # Fallback (shouldn't happen, but handle gracefully)
+                        cum_v, mean_v = None, None
+                except ValueError:
+                    # Re-raise ValueError (invalid metric name) - don't catch it
+                    raise
+                except Exception as e:
+                    logger.warning(f"Failed to calculate metric '{name}' for timepoint {t}: {e}")
                     cum_v, mean_v = None, None
                 cum_vals.append(cum_v)
                 mean_vals.append(mean_v)
 
-            # wähle gewünschte Ausgabe
-            if fluo_kind == 'mean':
-                df = pd.DataFrame({series_id: mean_vals}, index=rel_times)
-            elif fluo_kind == 'cumulative':
-                df = pd.DataFrame({series_id: cum_vals}, index=rel_times)
-            else:
-                # falls nicht spezifiziert, beide zurückgeben (MultiIndex)
-                df = pd.DataFrame(
-                    { (series_id, 'cumulative'): cum_vals,
-                    (series_id, 'mean'): mean_vals },
-                    index=rel_times
-                )
-                df.columns = pd.MultiIndex.from_tuples(df.columns)
+            # Return both as MultiIndex DataFrame
+            df = pd.DataFrame(
+                { (series_id, 'cumulative'): cum_vals,
+                  (series_id, 'mean'): mean_vals },
+                index=rel_times
+            )
+            df.columns = pd.MultiIndex.from_tuples(df.columns)
 
         # 4) timepoint (optional) → ggf. in relative Stunden konvertieren
         if timepoint is not None:
@@ -1835,37 +2628,654 @@ class SpheroidSeries:
 
         # 5) Plot (optional)
         if plot:
-            plt.figure(figsize=(6, 4))
+            # Axes-Handling analog zu radial_profile:
+            fig = None
+            if ax is None:
+                fig, ax = plt.subplots(figsize=(6, 4))
+            else:
+                fig = ax.figure
+            
+            # Prepare plot_kwargs
+            if plot_kwargs is None:
+                plot_kwargs = {}
+            
+            # Default plot style: orange Linie, keine Marker
+            default_kwargs = {
+                'color': '#D97706',  # gleiche Orange wie im Histogram-Viewer
+                'linestyle': '-',
+                'linewidth': 2,
+            }
+            # Nutzer-Overrides zulassen
+            default_kwargs.update(plot_kwargs)
+            
             if isinstance(df.columns, pd.MultiIndex):
-                # beide Fluoreszenz-Varianten
+                # beide Fluoreszenz-Varianten (cumulative / mean)
                 x = np.array(df.index) / 24
                 for sub in df.columns.levels[1]:
                     y = df[(series_id, sub)].to_numpy(dtype=float)
                     if skip_nan:
                         m = ~np.isnan(y)
-                        plt.plot(x[m], y[m], 'o-', label=sub)
+                        ax.plot(x[m], y[m], label=sub, **default_kwargs)
                     else:
-                        plt.plot(x, y, 'o-', label=sub)
-                plt.legend()
+                        ax.plot(x, y, label=sub, **default_kwargs)
+                ax.legend()
             else:
                 x = np.array(df.index) / 24
                 y = df.iloc[:, 0].to_numpy(dtype=float)
                 if skip_nan:
                     m = ~np.isnan(y)
-                    plt.plot(x[m], y[m], 'o-')
+                    ax.plot(x[m], y[m], **default_kwargs)
                 else:
-                    plt.plot(x, y, 'o-')
-            plt.grid(True, alpha=0.3)
-            plt.xlabel('Time [d]')
-            if self._result and name in getattr(self._result, 'plot_name_dict', {}):
-                plt.ylabel(rf'{self._result.plot_name_dict[name]}')
-            else:
-                plt.ylabel(name)
-            plt.title(f'{name} - {self.name}')
-            plt.tight_layout()
-            plt.show()
+                    ax.plot(x, y, **default_kwargs)
             
+            # Default formatting
+            ax.grid(True, alpha=0.3)
+            ax.set_xlabel('Time [d]')
+            if self._result and name in getattr(self._result, 'plot_name_dict', {}):
+                ax.set_ylabel(rf'{self._result.plot_name_dict[name]}')
+            else:
+                ax.set_ylabel(name)
+            ax.set_title(f'{name} - {self.name}')
+            
+            # Save if requested
+            if savepath is not None:
+                if fig is None:
+                    fig = ax.figure
+                fig.savefig(savepath, bbox_inches='tight')
+            
+            # Show only if we created the figure ourselves (wie radial_profile)
+            if fig is not None:
+                plt.tight_layout()
+                plt.show()
+
+            return df, ax
+
         return df
+
+    def growth_rate(self, metric_name: str = 'radius', time_period: str | None = None, model: str = 'linear') -> tuple[float, float]:
+        """
+        Calculate the growth rate (slope) of a metric over time using linear or logarithmic regression.
+        
+        Parameters
+        ----------
+        metric_name : str, default='radius'
+            Name of the metric to analyze ('radius', 'area', or fluorescence metrics).
+        time_period : str | None, default=None
+            Optional time period name to limit analysis to specific time range.
+            If None, uses all available timepoints.
+        model : str, default='linear'
+            Model to use for fitting. Options:
+            - 'linear': Linear growth (y = a*t + b), returns slope in original units
+            - 'log': Logarithmic/exponential growth (log(y) = a*t + b), returns growth rate in log space
+        
+        Returns
+        -------
+        tuple[float, float]
+            Tuple containing (growth_rate, std_error) where:
+            - growth_rate: The slope of the fit:
+              * For 'linear': slope in original units (e.g., µm/day for radius)
+              * For 'log': coefficient in log space (change in log(metric) per day)
+            - std_error: Standard error of the slope estimate
+        
+        Raises
+        ------
+        ValueError
+            If insufficient data points are available (< 2 points), if the metric is not supported,
+            or if model is not 'linear' or 'log'.
+        KeyError
+            If the specified time_period does not exist.
+        
+        Notes
+        -----
+        - For radius with 'linear': growth_rate is in µm/day
+        - For area with 'linear': growth_rate is in µm²/day
+        - For 'log': growth_rate represents the rate of change in log space (dimensionless per day)
+        - NaN values are automatically excluded from the fit
+        - Uses scipy.optimize.curve_fit for regression
+        - For 'log' model, values must be positive (values <= 0 are excluded)
+        """
+        if model not in ['linear', 'log']:
+            raise ValueError(f"Model '{model}' not supported. Options: 'linear', 'log'.")
+        
+        # Get metric data over time
+        metric_df = self.metric(name=metric_name, time_period=time_period, interpolate=False)
+        
+        if metric_df.empty:
+            raise ValueError(f"No data available for metric '{metric_name}' in the specified time period.")
+        
+        # Extract time (in days) and values
+        # metric_df index is in hours, convert to days
+        times_days = np.array(metric_df.index) / 24.0
+        
+        # Handle MultiIndex columns (for fluorescence without kind specified)
+        if isinstance(metric_df.columns, pd.MultiIndex):
+            # Use 'mean' if available, otherwise 'cumulative'
+            if ('mean',) in metric_df.columns.levels[1]:
+                values = metric_df.xs('mean', level=1, axis=1).iloc[:, 0].values
+            else:
+                values = metric_df.xs('cumulative', level=1, axis=1).iloc[:, 0].values
+        else:
+            values = metric_df.iloc[:, 0].values
+        
+        # Filter out NaN values
+        valid_mask = ~np.isnan(values) & ~np.isnan(times_days)
+        
+        # For log model, also filter out non-positive values
+        if model == 'log':
+            valid_mask = valid_mask & (values > 0)
+        
+        valid_times = times_days[valid_mask]
+        valid_values = values[valid_mask]
+        
+        if len(valid_times) < 2:
+            raise ValueError(f"Insufficient data points for fitting: {len(valid_times)} valid points (need at least 2).")
+        
+        from scipy.optimize import curve_fit
+        
+        if model == 'log':
+            # Logarithmic growth: fit log(values) vs time
+            # Returns growth rate as coefficient in log space
+            def log_func(t, a, b):
+                return a * t + b
+            
+            # Fit log(values) = a*t + b
+            log_values = np.log(valid_values)
+            try:
+                popt, pcov = curve_fit(log_func, valid_times, log_values)
+                growth_rate = popt[0]  # coefficient in log space
+                std_error = np.sqrt(pcov[0, 0])
+            except Exception as e:
+                raise ValueError(f"Failed to fit logarithmic model: {e}")
+        else:  # model == 'linear'
+            # Linear fit: y = a * t + b
+            def linear_func(t, a, b):
+                return a * t + b
+            
+            try:
+                popt, pcov = curve_fit(linear_func, valid_times, valid_values)
+                growth_rate = popt[0]  # slope
+                std_error = np.sqrt(pcov[0, 0])  # standard error of slope
+            except Exception as e:
+                raise ValueError(f"Failed to fit linear model: {e}")
+        
+        return (float(growth_rate), float(std_error))
+
+    def intensity(self,
+                  channel: str = 'brightfield',
+                  mean: float | None = None,
+                  value_range: tuple[float, float] | None = None,
+                  reset: bool = False,
+                  timepoint: int | str | datetime | None = None,
+                  show: bool = True) -> np.ndarray:
+        """
+        Configure an intensity window for a given channel across the series.
+
+        The interactive viewer is shown for a single reference timepoint
+        (by default the last available), and the resulting window is then
+        applied to all SpheroidImage items in this series for consistent
+        visualization (e.g. in :meth:`show` or :class:`SpheroidImage.show`).
+
+        Parameters
+        ----------
+        channel : str, default='brightfield'
+            Channel to adjust ('brightfield', 'green', 'red', 'blue',
+            or full keys like 'fluorescence_green').
+        mean : float | None
+            Optional initial mean intensity in [0,255].
+        value_range : (float, float) | None
+            Optional initial [low, high] window in [0,255].
+        reset : bool, default=False
+            If True, ignore any previously stored windows and recompute
+            defaults from the reference image (unless mean/range are given).
+        timepoint : int | str | datetime | None, default=None
+            Reference timepoint for interactive adjustment. If None, uses
+            the last available timepoint. If int (hours) or str, the closest
+            real timepoint is used.
+        show : bool, default=True
+            If True, open the interactive histogram viewer for the reference
+            image. If False, only set/update the window programmatically.
+
+        Returns
+        -------
+        np.ndarray
+            Display-ready image of the reference SpheroidImage after
+            applying the configured window.
+        """
+        if not self.spheroid_image_dict:
+            raise ValueError("No spheroid images available in series.")
+
+        # Helper for timepoint resolution
+        def _ensure_dt(val):
+            if isinstance(val, datetime):
+                return val
+            if isinstance(val, str):
+                return datetime.strptime(val, '%Y-%m-%d %H:%M:%S')
+            if isinstance(val, (int, float)):
+                sorted_times = sorted(self.spheroid_image_dict.keys())
+                if not sorted_times:
+                    raise ValueError("No timepoints available in series")
+                t0 = sorted_times[0] if isinstance(sorted_times[0], datetime) else datetime.strptime(sorted_times[0], '%Y-%m-%d %H:%M:%S')
+                return t0 + pd.Timedelta(hours=float(val))
+            return val
+
+        # Choose reference timepoint
+        sorted_times = sorted(self.spheroid_image_dict.keys())
+        if timepoint is None:
+            ref_tp = sorted_times[-1]
+        else:
+            target_dt = _ensure_dt(timepoint)
+            ref_tp = min(sorted_times,
+                         key=lambda x: abs((_ensure_dt(x) - target_dt).total_seconds()))
+
+        ref_img: SpheroidImage = self.spheroid_image_dict[ref_tp]
+
+        # Run intensity configuration on reference image
+        disp_img = ref_img.intensity(
+            channel=channel,
+            mean=mean,
+            value_range=value_range,
+            reset=reset,
+            show=show,
+        )
+
+        # Propagate resulting window to all images in the series
+        key = ref_img._get_channel_key(channel)
+        cfg = ref_img.intensity_windows.get(key)
+        if cfg is not None:
+            for sph in self.spheroid_image_dict.values():
+                sph.intensity_windows[key] = dict(cfg)  # shallow copy
+
+        return disp_img
+
+    def radial_profile(self, timepoints: list[int | str | datetime] | None = None, 
+                       channels: str | list[str] = ['green'], 
+                       return_absolute: bool = False,
+                       normalize: bool = True,
+                       smoothing: float = 2,
+                       plot: bool = True,
+                       savepath: str | None = None,
+                       visualise_change: bool = False,
+                       ax: Optional[plt.Axes] = None) -> dict | tuple[dict, plt.Axes]:
+        """
+        Calculate and plot radial profiles for multiple timepoints.
+        
+        Parameters
+        ----------
+        timepoints : list[int | str | datetime] | None, default=None
+            List of timepoints to analyze. If None, uses all available timepoints.
+            Can be:
+            - int: Relative time in hours
+            - str: Datetime string in format 'YYYY-MM-DD HH:MM:SS'
+            - datetime: Datetime object
+        channels : str | list[str], default=['green']
+            Fluorescence channel(s) to analyze. Can be a single channel string ('green', 'red', 'blue')
+            or a list of channels.
+        return_absolute : bool, default=False
+            If True, uses absolute distances in μm. If False, uses normalized distances (0-1).
+            Note: For absolute distances, each timepoint may have different x-axis ranges.
+        normalize : bool, default=True
+            Whether to normalize intensity profiles to [0,1]
+        smoothing : float, default=2
+            Gaussian smoothing parameter (sigma) for radial profile
+        plot : bool, default=True
+            Whether to display a plot.
+        savepath : str | None, default=None
+            Optional path to save the plot (only used if ``plot=True``).
+        visualise_change : bool, default=False
+            If True, compute the relative change in intensity per day for each radial
+            position (basierend auf paarweisen Differenzen zwischen aufeinanderfolgenden
+            Zeitpunkten für den ersten Kanal in ``channels``) und zeige diese als
+            RdYlGn-Colormap-Hintergrund an, mit einer Colorbar "Change in Intensity [%/d]".
+        ax : matplotlib.axes.Axes | None, default=None
+            Optional matplotlib Axes object to plot on. If provided and ``plot=True``,
+            the plot is drawn onto this axes and *no* ``plt.show()`` is called
+            (analog zum Verhalten von :meth:`metric`). Wird kein ``ax`` übergeben,
+            wird eine neue Figure/Axes erzeugt und nach dem Plot angezeigt.
+        visualise_change : bool, default=False
+            If True, compute the relative change in intensity per day for each radial
+            position (based on linear regression over time for the first channel in
+            ``channels``) and display it as a RdYlGn colormap background behind the
+            profiles, with a colorbar labelled "Change in Intensity [%/d]".
+        
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - timepoints: List of processed timepoint identifiers
+            - profiles: Dictionary mapping timepoint -> channel -> profile data
+            - distances: Dictionary mapping timepoint -> distance array (relative or absolute)
+        """
+        from SpheroidPy.utils.color_palettes import CARTO_SEQUENTIAL
+        
+        # Normalize channels to list
+        if isinstance(channels, str):
+            channels = [channels]
+        
+        # Helper function to convert timepoint to datetime
+        def _ensure_dt(val):
+            if isinstance(val, datetime):
+                return val
+            elif isinstance(val, str):
+                return datetime.strptime(val, '%Y-%m-%d %H:%M:%S')
+            elif isinstance(val, (int, float)):
+                # Convert relative hours to datetime
+                sorted_times = sorted(self.spheroid_image_dict.keys())
+                if not sorted_times:
+                    raise ValueError("No timepoints available in series")
+                t0 = sorted_times[0] if isinstance(sorted_times[0], datetime) else datetime.strptime(sorted_times[0], '%Y-%m-%d %H:%M:%S')
+                return t0 + pd.Timedelta(hours=float(val))
+            else:
+                raise ValueError(f"Cannot convert {type(val)} to datetime")
+        
+        # Process timepoints and find matching images
+        processed_timepoints = []
+        timepoint_images = {}
+        
+        # If timepoints is None, use all available timepoints
+        if timepoints is None:
+            timepoints = sorted(self.spheroid_image_dict.keys())
+            # Convert to list if needed
+            if not isinstance(timepoints, list):
+                timepoints = list(timepoints)
+        
+        for tp in timepoints:
+            tp_dt = _ensure_dt(tp)
+            # Find closest timepoint in series
+            sorted_times = sorted(self.spheroid_image_dict.keys())
+            closest_tp = min(sorted_times, 
+                           key=lambda x: abs((_ensure_dt(x) - tp_dt).total_seconds()))
+            
+            # Check if close enough (within 1 hour)
+            time_diff = abs((_ensure_dt(closest_tp) - tp_dt).total_seconds() / 3600)
+            if time_diff > 1.0:
+                logger.warning(f"Timepoint {tp} is more than 1 hour away from closest match {closest_tp}. Skipping.")
+                continue
+            
+            if closest_tp not in timepoint_images:
+                processed_timepoints.append(closest_tp)
+                timepoint_images[closest_tp] = self.spheroid_image_dict[closest_tp]
+        
+        if not processed_timepoints:
+            raise ValueError("No valid timepoints found")
+        
+        # Sort timepoints chronologically
+        processed_timepoints.sort(key=lambda x: _ensure_dt(x))
+        
+        # Calculate profiles for each timepoint
+        profiles_data = {}
+        distances_data = {}
+        
+        for tp in processed_timepoints:
+            img = timepoint_images[tp]
+            try:
+                result = img.radial_profile(
+                    channels=channels,
+                    plot=False,
+                    normalize=normalize,
+                    return_absolute=return_absolute,
+                    smoothing=smoothing
+                )
+                profiles_data[tp] = result['intensity_profiles']
+                if return_absolute and 'absolute_distances' in result:
+                    distances_data[tp] = result['absolute_distances']
+                else:
+                    distances_data[tp] = result['relative_distances']
+            except Exception as e:
+                logger.warning(f"Failed to calculate radial profile for timepoint {tp}: {e}")
+                continue
+        
+        # Plotting
+        if plot:
+            # Axes-Handling ähnlich wie in metric():
+            # - Wenn ax=None: neue Figure/Axes erstellen und am Ende plt.show() aufrufen.
+            # - Wenn ax vorhanden: darauf zeichnen, keine neue Figure anzeigen.
+            fig: Optional[plt.Figure] = None
+            if ax is None:
+                fig, ax = plt.subplots(figsize=(8, 6))
+            else:
+                fig = ax.figure
+            
+            # Determine global x-range from distances (used for background and limits)
+            all_distances = []
+            for dist in distances_data.values():
+                if dist is not None and len(dist) > 0:
+                    all_distances.extend(dist)
+            if all_distances:
+                all_distances = np.array(all_distances, dtype=float)
+                xmin, xmax = float(all_distances.min()), float(all_distances.max())
+            else:
+                xmin = xmax = None
+            
+            # Color palette mapping for channels (using channel-similar palettes)
+            # Use Green for green, Red/Orange for red, Teal for blue
+            channel_palettes = {
+                'green': CARTO_SEQUENTIAL.get('Green', ['#00441b', '#006d2c', '#238b45', '#41ab5d', '#74c476', '#a1d99b', '#c7e9c0']),
+                'red': CARTO_SEQUENTIAL.get('Red', ['#7f0000', '#b31b1b', '#d94801', '#f16913', '#fd8d3c', '#fdae6b', '#fee6ce']),
+                'blue': CARTO_SEQUENTIAL.get('Teal', ['#004c4c', '#006d6d', '#238b8b', '#41a9a9', '#74c8c8', '#a1e3e3', '#c8f5f5']),
+            }
+            
+            # Generate colors for timepoints (darker for later timepoints)
+            n_timepoints = len(processed_timepoints)
+            
+            # Optional Hintergrund: paarweiser Änderungsrate (%/d) zwischen aufeinanderfolgenden
+            # Profilen des ersten Kanals; die Color-Map wird nur zwischen den jeweiligen
+            # Kurvensegmenten gezeichnet.
+            if visualise_change and n_timepoints >= 2 and len(channels) > 0 and xmin is not None:
+                base_channel = channels[0]
+                # Sammle alle Änderungsraten, um symmetrische Normierung um 0 zu bekommen
+                all_rates = []
+                interval_data = []
+                t_days = [(_ensure_dt(tp) - _ensure_dt(processed_timepoints[0])).total_seconds() / 86400.0
+                          for tp in processed_timepoints]
+                
+                for k in range(n_timepoints - 1):
+                    tp0 = processed_timepoints[k]
+                    tp1 = processed_timepoints[k + 1]
+                    ch_profiles0 = profiles_data.get(tp0, {})
+                    ch_profiles1 = profiles_data.get(tp1, {})
+                    if base_channel not in ch_profiles0 or base_channel not in ch_profiles1:
+                        continue
+                    prof0 = ch_profiles0[base_channel]
+                    prof1 = ch_profiles1[base_channel]
+                    y0 = np.asarray(prof0.get('mean'), dtype=float)
+                    y1 = np.asarray(prof1.get('mean'), dtype=float)
+                    # Distanzachsen der früheren und späteren Kurve für dieses Intervall
+                    dist0 = np.asarray(distances_data.get(tp0), dtype=float)
+                    dist1 = np.asarray(distances_data.get(tp1), dtype=float)
+                    if dist0.size == 0 or dist1.size == 0:
+                        continue
+                    n_r = dist0.size
+                    # Falls Längen nicht übereinstimmen, überspringen
+                    if y0.size != n_r or y1.size != dist1.size:
+                        continue
+                    # Interpolation der späteren Kurve auf die Radialpositionen der früheren Kurve
+                    # für die Darstellung (Berechnung der Rate bleibt bin-basiert auf y0/y1).
+                    try:
+                        y1_plot = np.interp(dist0, dist1, y1)
+                    except Exception:
+                        y1_plot = y1.copy()
+                    # x-Kanten für kleine Rechtecke zwischen den Kurven (intervallspezifisch)
+                    x_edges = np.empty(n_r + 1, dtype=float)
+                    x_edges[1:-1] = 0.5 * (dist0[:-1] + dist0[1:])
+                    x_edges[0] = dist0[0] - (x_edges[1] - dist0[0])
+                    x_edges[-1] = dist0[-1] + (dist0[-1] - x_edges[-2])
+                    
+                    dt_days = t_days[k + 1] - t_days[k]
+                    if dt_days == 0:
+                        continue
+                    # Prozentuale Änderungsrate pro Tag relativ zur Baseline (frühere Kurve)
+                    rate = np.full(n_r, np.nan, dtype=float)
+                    baseline = y0.copy()
+                    valid = np.isfinite(baseline) & np.isfinite(y1) & (baseline > 0)
+                    rate[valid] = ((y1[valid] - baseline[valid]) / baseline[valid]) / dt_days * 100.0
+                    all_rates.append(rate[valid])
+                    interval_data.append({'y0': y0, 'y1_plot': y1_plot, 'rate': rate, 'x_edges': x_edges})
+                
+                if interval_data and all_rates:
+                    all_rates_flat = np.concatenate(all_rates)
+                    v_abs = float(np.nanmax(np.abs(all_rates_flat)))
+                    if v_abs == 0.0:
+                        v_abs = 1.0
+                    # Behalte die volle Normierung (-v_abs ... +v_abs), aber verwende nur
+                    # den mittleren Teil der Colormap (keine extremen Endfarben).
+                    norm = TwoSlopeNorm(vmin=-v_abs, vcenter=0.0, vmax=v_abs)
+                    base_cmap = plt.get_cmap('RdYlGn')
+                    # z.B. nur die mittleren 50 % der Colormap (0.25 .. 0.75) verwenden
+                    cmap = LinearSegmentedColormap.from_list(
+                        'RdYlGn_mid',
+                        base_cmap(np.linspace(0.15, 0.85, 256))
+                    )
+                    
+                    # y-Bereich aus allen Profilen für sinnvolle Achsenskala
+                    all_means = []
+                    all_stds = []
+                    for tp in processed_timepoints:
+                        ch_profiles = profiles_data.get(tp, {})
+                        if base_channel not in ch_profiles:
+                            continue
+                        prof = ch_profiles[base_channel]
+                        m = np.asarray(prof.get('mean'), dtype=float)
+                        s = np.asarray(prof.get('std', np.zeros_like(m)), dtype=float)
+                        all_means.append(m)
+                        all_stds.append(s)
+                    if all_means:
+                        all_means_arr = np.concatenate(all_means)
+                        all_stds_arr = np.concatenate(all_stds)
+                        ymin = float(np.nanmin(all_means_arr - all_stds_arr))
+                        ymax = float(np.nanmax(all_means_arr + all_stds_arr))
+                        if not np.isfinite(ymin) or not np.isfinite(ymax) or ymin == ymax:
+                            ymin, ymax = 0.0, 1.0
+                        pad = 0.05 * (ymax - ymin)
+                        ymin -= pad
+                        ymax += pad
+                    else:
+                        ymin, ymax = 0.0, 1.0
+                    
+                    for data in interval_data:
+                        y0 = data['y0']
+                        y1_plot = data['y1_plot']
+                        rate = data['rate']
+                        x_edges = data['x_edges']
+                        n_r_local = len(rate)
+                        for j in range(n_r_local):
+                            r_val = rate[j]
+                            if not np.isfinite(r_val):
+                                continue
+                            y_low = float(min(y0[j], y1_plot[j]))
+                            y_high = float(max(y0[j], y1_plot[j]))
+                            if not np.isfinite(y_low) or not np.isfinite(y_high) or y_low == y_high:
+                                continue
+                            color = cmap(norm(r_val))
+                            ax.fill_between(
+                                [x_edges[j], x_edges[j + 1]],
+                                [y_low, y_low],
+                                [y_high, y_high],
+                                color=color,
+                                alpha=0.15,
+                                linewidth=0,
+                                zorder=0,
+                            )
+                    
+                    # Colorbar rechts neben dem Plot
+                    from matplotlib.cm import ScalarMappable
+                    sm = ScalarMappable(norm=norm, cmap=cmap)
+                    sm.set_array([])
+                    cbar = fig.colorbar(sm, ax=ax, pad=0.02)
+                    cbar.set_label("Change in Intensity [%/d]")
+                    
+                    ax.set_ylim(ymin, ymax)
+            
+            # Plot radial profiles for each channel/timepoint
+            for ch_idx, channel in enumerate(channels):
+                if channel not in channel_palettes:
+                    # Fallback to gray palette
+                    palette = ['#333333', '#555555', '#777777', '#999999', '#bbbbbb', '#dddddd']
+                else:
+                    palette = channel_palettes[channel]
+                
+                # Use palette centered around middle, darker for later timepoints
+                n_colors = len(palette)
+                mid_idx = n_colors // 2
+                
+                for tp_idx, tp in enumerate(processed_timepoints):
+                    if tp not in profiles_data or channel not in profiles_data[tp]:
+                        continue
+                    
+                    profile = profiles_data[tp][channel]
+                    distances = distances_data[tp]
+                    
+                    # Select color: later timepoints get darker colors
+                    # Map tp_idx to palette index (0 = earliest, darker for later)
+                    if n_timepoints == 1:
+                        color_idx = mid_idx
+                    else:
+                        # Map [0, n_timepoints-1] to palette indices
+                        # Earlier timepoints use lighter colors (higher indices)
+                        # Later timepoints use darker colors (lower indices)
+                        normalized_pos = tp_idx / (n_timepoints - 1) if n_timepoints > 1 else 0.5
+                        # Reverse: 0 -> high index (light), 1 -> low index (dark)
+                        color_idx = int((1 - normalized_pos) * (n_colors - 1))
+                        color_idx = max(0, min(n_colors - 1, color_idx))
+                    
+                    color = palette[color_idx]
+                    
+                    # Format timepoint label
+                    tp_dt = _ensure_dt(tp)
+                    t0_dt = _ensure_dt(processed_timepoints[0])
+                    rel_hours = (tp_dt - t0_dt).total_seconds() / 3600
+                    label = f"{channel} @ {rel_hours:.1f}h"
+                    
+                    mean = profile['mean']
+                    std = profile.get('std', np.zeros_like(mean))
+                    
+                    # Es gibt nur eine y-Achse: immer auf ax plotten
+                    ax.plot(distances, mean, color=color, label=label, linewidth=2)
+                    ax.fill_between(distances, mean - std, mean + std, 
+                                    color=color, alpha=0.2)
+            
+            # Set labels
+            if return_absolute:
+                ax.set_xlabel('Radial distance [µm]')
+            else:
+                ax.set_xlabel('Normalized distance (ρ)')
+            
+            if normalize:
+                ax.set_ylabel('Normalized intensity')
+            else:
+                ax.set_ylabel('Intensity (a.u.)')
+            
+            ax.set_title(f'Radial Profiles Over Time - {self.name}', fontweight='bold')
+            ax.grid(True, alpha=0.3)
+            
+            ax.legend(loc='best', fontsize=9)
+            
+            # Set xlims: crop to min/max of all timepoints
+            if xmin is not None and xmax is not None:
+                ax.set_xlim(xmin, xmax)
+            
+            if fig is not None:
+                fig.tight_layout()
+                if savepath is not None:
+                    fig.savefig(savepath, transparent=True, dpi=300, bbox_inches='tight')
+                # Nur anzeigen, wenn wir die Figure selbst erzeugt haben
+                if ax is not None and ax.figure is fig:
+                    plt.show()
+            else:
+                # ax wurde extern übergeben – dennoch speichern, falls gewünscht
+                if savepath is not None and ax is not None:
+                    ax.figure.savefig(savepath, transparent=True, dpi=300, bbox_inches='tight')
+        
+        result = {
+            'timepoints': processed_timepoints,
+            'profiles': profiles_data,
+            'distances': distances_data,
+        }
+        # Optionales zweites Rückgabe-Objekt: Plot-Handle (ax),
+        # aber nur, wenn tatsächlich geplottet wurde (plot=True).
+        if plot:
+            return result, ax
+        # plot=False → reine Datenrückgabe wie früher
+        return result
 
     def __repr__(self):
         return self.name + (f'\n> Number of Timepoints: {len(self.spheroid_image_dict.keys())}'
@@ -1911,39 +3321,76 @@ class SpheroidSeries:
             widgets.HTML(logo_html)
         ], layout=widgets.Layout(justify_content='space-between', align_items='center', width='100%'))
         header_container = widgets.VBox([header_row], layout=widgets.Layout(
-            border='1px solid #bbb', border_radius='10px', padding='0px', margin='0px', width='100%'))
+            border='none', border_radius='10px', padding='0px', margin='0px', width='100%'))
 
+        # Titles above image and plot (outside the figure) – bold, minimal gap to content
+        image_title = widgets.HTML(
+            value="",
+            layout=widgets.Layout(padding="0 8px 2px", margin="0px 0px -12px 0px", width="100%", text_align="center")
+        )
+        plot_title = widgets.HTML(
+            value="",
+            layout=widgets.Layout(padding="0 8px 2px", margin="0px 0px -12px 0px", flex="1 1 auto", min_width="0", overflow="hidden")
+        )
+        metric_dropdown = widgets.Dropdown(options=['radius', 'area', 'profile'], value='radius', description='Metric:', layout=widgets.Layout(flex='0 0 auto', width='150px', height='18px'), style={'description_width':'60px','font_size':'5px'})
+
+        plot_header_row = widgets.HBox(
+            [plot_title, metric_dropdown],
+            layout=widgets.Layout(width='100%', min_width='0', align_items='center', overflow='hidden', justify_content='space-between', padding='0 30px 0px 8px')
+        )
+        
         # --- Bildanzeige ---
         image_output = widgets.Output()
-        # --- Bildanzeige ---
-        image_controls = widgets.HBox([channel_dropdown, show_contour], layout=widgets.Layout(justify_content='center', align_items='center', width='100%', gap='0px'))
+        # Image controls (channel + contour) centered, tight spacing, no horizontal scroll
+        image_controls = widgets.HBox(
+            [channel_dropdown, show_contour],
+            layout=widgets.Layout(
+                justify_content="center",
+                align_items="center",
+                width="100%",
+                gap="0px",
+                padding="6px 0px",
+                overflow="hidden",
+                min_width="0",
+            ),
+        )
         image_output.layout.width = '100%'
         def update_image(*args):
             idx = time_slider.value
             channel = channel_dropdown.value
             update_time_label(idx)
-            sph_img = self.spheroid_image_dict[timepoints[idx]]
+            if idx >= len(timepoints):
+                image_title.value = ""
+                return
+            timepoint = timepoints[idx]
+            image_title.value = f"<div style='text-align: center;'><span style='font-size: 12px; font-weight: 600; color: #333;'>{timepoint} | {channel}</span></div>"
+            sph_img = self.spheroid_image_dict[timepoint]
             try:
+                # Verwende die intensity-Fensterung, falls für diesen Kanal gesetzt
                 if channel == 'brightfield':
-                    img = sph_img.brightfield()
+                    img = sph_img.display_channel('brightfield')
                 elif channel.startswith('fluorescence_'):
                     color = channel.split('_')[1]
-                    img = sph_img.fluorescence(color)
-                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    img = sph_img.display_channel(f'fluorescence_{color}')
+                    if img is not None and img.ndim == 3:
+                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 else:
-                    img = sph_img.brightfield()
+                    img = sph_img.display_channel('brightfield')
             except Exception as e:
-                image_output.clear_output()
+                image_output.clear_output(wait=True)
                 with image_output:
                     print(f"Error loading image: {e}")
                 return
-            image_output.clear_output()
+            image_output.clear_output(wait=True)
             with image_output:
                 # Dynamische Breite/Höhe für das Bild
                 container_width = 600  # px, kann ggf. dynamisch bestimmt werden
                 aspect = sph_img.image_size[1] / sph_img.image_size[0] if sph_img.image_size[0] else 1
                 fig, ax = plt.subplots(figsize=(8, 8 * aspect))
-                ax.imshow(img, extent=[0, sph_img.image_size[0], 0, sph_img.image_size[1]])
+                if img.ndim == 2:
+                    ax.imshow(img, extent=[0, sph_img.image_size[0], 0, sph_img.image_size[1]], cmap='gray')
+                else:
+                    ax.imshow(img, extent=[0, sph_img.image_size[0], 0, sph_img.image_size[1]])
                 if show_contour.value and sph_img.contour is not None:
                     try:
                         contour = sph_img.scaled_contour
@@ -1956,44 +3403,222 @@ class SpheroidSeries:
                         ax.plot(xs, ys, 'w-', linewidth=2)
                     except Exception as e:
                         print(f"Error drawing contour: {e}")
-                ax.set_title(f"{timepoints[idx]} | {channel}")
+                
+                # 250 µm scalebar (white line + label below, bottom-right corner with spacing)
+                w, h = sph_img.image_size[0], sph_img.image_size[1]
+                bar_len = 250
+                margin_x, margin_y = 0.05 * w, 0.05 * h
+                x_left = w - margin_x - bar_len
+                x_right = w - margin_x
+                y_bar = margin_y
+                ax.plot([x_left, x_right], [y_bar, y_bar], "w-", linewidth=2.5, solid_capstyle="butt")
+                ax.text((x_left + x_right) / 2, y_bar - 0.015 * h, "250 µm", color="white", fontsize=10, ha="center", va="top", family="sans-serif")
+                
                 ax.axis('off')
                 plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
                 plt.show()
-        image_panel = widgets.VBox([image_output, image_controls], layout=widgets.Layout(
-            border='1px solid #bbb', border_radius='10px', padding='0px', margin='0px', flex='1 1 0%', width='100%'))
+        image_panel = widgets.VBox([image_title, image_output, image_controls], layout=widgets.Layout(
+            border='none', border_radius='10px', padding='0px', margin='0px', flex='1 1 0%', width='100%', overflow='hidden'))
+
+        def _channel_to_fluorescence(ch_desc):
+            """Map channel dropdown value to fluorescence channel name for radial_profile."""
+            if ch_desc == 'fluorescence_green':
+                return 'green'
+            if ch_desc == 'fluorescence_red':
+                return 'red'
+            if ch_desc == 'fluorescence_blue':
+                return 'blue'
+            return 'green'  # fallback for brightfield (profile needs fluorescence)
 
         # --- Beispielplot (Radius über Zeit) ---
         plot_output = widgets.Output()
         def update_plot(*args):
-            plot_output.clear_output()
+            metric = metric_dropdown.value
+            if metric == "radius":
+                metric_label = "Radius"
+            elif metric == "area":
+                metric_label = "Area"
+            else:
+                metric_label = "Radial profile"
+            over_time = " over time" if metric in ("radius", "area") else ""
+            plot_title.value = f"<div style='text-align: center;'><span style='font-size: 14px; font-weight: 600; color: #333;'>{metric_label}{over_time} – {self.name}</span></div>"
+            
+            plot_output.clear_output(wait=True)
             with plot_output:
-                def _ensure_dt(val):
-                    return val if isinstance(val, datetime) else datetime.strptime(val, '%Y-%m-%d %H:%M:%S')
-                base_t0 = _ensure_dt(timepoints[0])
-                times = [ (_ensure_dt(tp) - base_t0).total_seconds()/24/3600 for tp in timepoints ]
-                radii = [ self.spheroid_image_dict[tp].radius for tp in timepoints ]
-                # convert None to np.nan for plotting
-                radii = [ (np.nan if r is None else r) for r in radii ]
-                idx = time_slider.value
-                current_time = times[idx]
-                current_radius = radii[idx]
-                fig, ax = plt.subplots(figsize=(6, 4.1))
-                ax.plot(times, radii, color='grey')
-                # plot current marker only if value is finite
-                if current_radius is not None and not np.isnan(current_radius):
-                    ax.plot(current_time, current_radius, '.', markersize=10, label=f'{current_radius:.1f} µm @ {current_time:.2f} d', color='#e29266')
-                ax.set_xlabel('Time [d]')
-                ax.set_ylabel('Radius [µm]')
-                ax.set_title('Radius')
-                ax.grid(True, alpha=0.3)
-                # show legend only if we added the current marker with label
-                if current_radius is not None and not np.isnan(current_radius):
-                    ax.legend()
-                plt.tight_layout()
-                plt.show()
-        plot_panel = widgets.VBox([plot_output], layout=widgets.Layout(
-            border='1px solid #bbb', border_radius='10px', padding='0px', margin='0px', flex='1 1 0%', width='100%', align_items='flex-start', justify_content='flex-start'))
+                try:
+                    if metric == "profile":
+                        # Normalized radial profile for current timepoint
+                        idx = time_slider.value
+                        if idx >= len(timepoints):
+                            return
+                        timepoint = timepoints[idx]
+                        image = self.spheroid_image_dict.get(timepoint)
+                        if image is None or image.contour is None or len(image.contour) < 3:
+                            plt.figure(figsize=(6, 4.1))
+                            plt.text(0.5, 0.5, 'No contour for radial profile.\nSegment the image first.', ha='center', va='center')
+                            plt.axis('off')
+                            plt.show()
+                        else:
+                            # Determine all available fluorescence channels for this image
+                            available_channels = []
+                            try:
+                                img_channels = getattr(image, "image_path_dict", {}) or {}
+                                for ch in ["green", "red", "blue"]:
+                                    if f"fluorescence_{ch}" in img_channels:
+                                        available_channels.append(ch)
+                            except Exception:
+                                available_channels = []
+
+                            if not available_channels:
+                                plt.figure(figsize=(6, 4.1))
+                                plt.text(
+                                    0.5,
+                                    0.5,
+                                    "No fluorescence channels available\nfor radial profile.",
+                                    ha="center",
+                                    va="center",
+                                )
+                                plt.axis("off")
+                                plt.show()
+                            else:
+                                # Compute normalized intensity profiles for all available channels
+                                result = image.radial_profile(
+                                    channels=available_channels,
+                                    plot=False,
+                                    normalize=True,
+                                    return_absolute=True,
+                                )
+
+                                # Absolute radial distance in µm for x-axis
+                                r_um = result.get("absolute_distances", None)
+                                if r_um is None:
+                                    # Fallback to normalized distances if absolute not available
+                                    r_um = result.get("relative_distances", None)
+                                    xlabel = "Normalized distance (ρ)"
+                                else:
+                                    xlabel = "Radial distance [µm]"
+
+                                intensity_profiles = result.get("intensity_profiles", {})
+
+                                if not intensity_profiles or r_um is None:
+                                    plt.figure(figsize=(6, 4.1))
+                                    plt.text(
+                                        0.5,
+                                        0.5,
+                                        "No radial profile data available.",
+                                        ha="center",
+                                        va="center",
+                                    )
+                                    plt.axis("off")
+                                    plt.show()
+                                else:
+                                    fig, ax = plt.subplots(figsize=(6, 4.1))
+
+                                    color_map = {
+                                        "green": "green",
+                                        "red": "red",
+                                        "blue": "blue",
+                                    }
+
+                                    for ch in available_channels:
+                                        prof = intensity_profiles.get(ch)
+                                        if not prof:
+                                            continue
+                                        y_mean = prof.get("mean")
+                                        y_std = prof.get("std")
+                                        if y_mean is None or y_std is None:
+                                            continue
+
+                                        col = color_map.get(ch, "grey")
+                                        ax.plot(r_um, y_mean, color=col, label=ch)
+                                        ax.fill_between(
+                                            r_um,
+                                            y_mean - y_std,
+                                            y_mean + y_std,
+                                            color=col,
+                                            alpha=0.2,
+                                        )
+
+                                    ax.set_xlabel(xlabel)
+                                    ax.set_ylabel("Normalized intensity")
+                                    # Set xlims: start at min value (not 0) to max value
+                                    if r_um is not None and len(r_um) > 0:
+                                        ax.set_xlim(r_um.min(), r_um.max())
+                                    ax.grid(True, alpha=0.3)
+                                    ax.legend()
+                                    plt.tight_layout()
+                                    plt.show()
+                    else:
+                        def _ensure_dt(val):
+                            return val if isinstance(val, datetime) else datetime.strptime(val, '%Y-%m-%d %H:%M:%S')
+                        base_t0 = _ensure_dt(timepoints[0])
+                        times = [ (_ensure_dt(tp) - base_t0).total_seconds()/24/3600 for tp in timepoints ]
+                        
+                        if metric == "area":
+                            values = [self.spheroid_image_dict[tp].area for tp in timepoints]
+                            ylabel = "Area [µm²]"
+                        else:
+                            values = [self.spheroid_image_dict[tp].radius for tp in timepoints]
+                            ylabel = "Radius [µm]"
+                        values = [v if v is not None else np.nan for v in values]
+                        idx = time_slider.value
+                        current_time = times[idx] if idx < len(times) else 0
+                        current_val = values[idx] if idx < len(values) else None
+                        
+                        fig, ax = plt.subplots(figsize=(6, 4.1))
+                        
+                        # Plot data first
+                        ax.plot(times, values, color='grey', zorder=5)
+                        if current_val is not None and not np.isnan(current_val):
+                            ax.plot(current_time, current_val, '.', markersize=10,
+                                    label=f"{current_val:.1f} {'µm' if metric == 'radius' else 'µm²'} @ {current_time:.2f} d", color="#e29266", zorder=6)
+                        ax.set_xlabel("Time [d]")
+                        ax.set_ylabel(ylabel)
+                        ax.grid(True, alpha=0.3)
+                        if current_val is not None and not np.isnan(current_val):
+                            ax.legend()
+                        
+                        # Add time periods as gray transparent background regions (after plot to get correct y-limits)
+                        if hasattr(self, 'time_periods') and self.time_periods:
+                            # Get actual y-axis limits after plotting
+                            y_min, y_max = ax.get_ylim()
+                            y_range = y_max - y_min
+                            
+                            for period_name, period in self.time_periods.items():
+                                if period.start_time is None or period.end_time is None:
+                                    continue
+                                
+                                # Convert period times to days relative to base_t0
+                                period_start_dt = period.start_time if isinstance(period.start_time, datetime) else datetime.strptime(str(period.start_time), '%Y-%m-%d %H:%M:%S')
+                                period_end_dt = period.end_time if isinstance(period.end_time, datetime) else datetime.strptime(str(period.end_time), '%Y-%m-%d %H:%M:%S')
+                                
+                                period_start_days = (period_start_dt - base_t0).total_seconds() / 24 / 3600
+                                period_end_days = (period_end_dt - base_t0).total_seconds() / 24 / 3600
+                                
+                                # Only show if period overlaps with data range
+                                if period_end_days >= times[0] and period_start_days <= times[-1]:
+                                    # Draw gray transparent background (behind plot)
+                                    ax.axvspan(period_start_days, period_end_days, 
+                                             alpha=0.15, color='gray', zorder=0)
+                                    
+                                    # Add period name centered at top of the region
+                                    period_center = (period_start_days + period_end_days) / 2
+                                    # Position text at top of plot (95% of y-range from bottom)
+                                    text_y = y_min + 0.95 * y_range
+                                    ax.text(period_center, text_y, period_name, 
+                                           ha='center', va='bottom', 
+                                           fontsize=9, color='black', 
+                                           zorder=10)
+                        
+                        plt.tight_layout()
+                        plt.show()
+                except Exception as e:
+                    plt.figure(figsize=(6, 4.1))
+                    plt.text(0.5, 0.5, f'No {metric} data available\n{str(e)}', ha='center', va='center')
+                    plt.axis('off')
+                    plt.show()
+        plot_panel = widgets.VBox([plot_header_row, plot_output], layout=widgets.Layout(
+            border='none', border_radius='10px', padding='0px', margin='0px', flex='1 1 0%', width='100%', align_items='flex-start', justify_content='flex-start', overflow='hidden'))
 
         # --- Segmentierungsoptionen (wie Visualisation._create_segmentation_controls, aber ohne HDF5) ---
         thresholding_input = widgets.FloatText(value=1.0, step=0.1, layout=widgets.Layout(width='60px'))
@@ -2020,6 +3645,7 @@ class SpheroidSeries:
                 if hasattr(sph_img, '_save_contour_to_hdf5'):
                     sph_img._save_contour_to_hdf5()
                 update_image()
+                update_plot()
             except Exception as e:
                 print(f"Manual segmentation failed: {e}")
         def thresholding_segmentation(b):
@@ -2039,6 +3665,7 @@ class SpheroidSeries:
                 if hasattr(sph_img, '_save_contour_to_hdf5'):
                     sph_img._save_contour_to_hdf5()
                 update_image()
+                update_plot()
             except Exception as e:
                 print(f"Thresholding segmentation failed: {e}")
         def ai_segmentation(b):
@@ -2047,15 +3674,17 @@ class SpheroidSeries:
             try:
                 dropdown_val = channel_dropdown.value
                 ch = dropdown_val if dropdown_val in ['brightfield', 'fluorescence_green', 'fluorescence_red', 'fluorescence_blue'] else 'brightfield'
-                res = sph_img.segmentation_detectron(ch, ai_input.value)
-                if isinstance(res, tuple) and len(res) == 2:
-                    sph_img.contour, sph_img.contour_touches_border = res
-                else:
-                    sph_img.contour = res
+                # Use the shared AI dispatcher so Config.ai_segmentation is respected.
+                sph_img.segmentation(
+                    methods=[('ai', ch)],
+                    border_margin=5,
+                    confidence=ai_input.value,
+                )
                 # Save contour to HDF5
                 if hasattr(sph_img, '_save_contour_to_hdf5'):
                     sph_img._save_contour_to_hdf5()
                 update_image()
+                update_plot()
             except Exception as e:
                 print(f"AI segmentation failed: {e}")
         def delete_contour(b):
@@ -2067,6 +3696,7 @@ class SpheroidSeries:
             if hasattr(sph_img, '_save_contour_to_hdf5'):
                 sph_img._save_contour_to_hdf5()  # This will handle None contour correctly
             update_image()
+            update_plot()
 
         manual_btn.on_click(manual_segmentation)
         thresholding_btn.on_click(thresholding_segmentation)
@@ -2083,7 +3713,7 @@ class SpheroidSeries:
         seg_panel = widgets.VBox([
             seg_title,
             seg_buttons
-        ], layout=widgets.Layout(margin='0px', padding='10px', border='1px solid #ccc', border_radius='5px', width='100%'))
+        ], layout=widgets.Layout(margin='0px', padding='10px', border='none', border_radius='5px', width='100%'))
 
         # --- Layout-Callbacks ---
         def on_any_change(*args):
@@ -2092,6 +3722,7 @@ class SpheroidSeries:
         time_slider.observe(lambda change: on_any_change(), names='value')
         channel_dropdown.observe(lambda change: update_image(), names='value')
         show_contour.observe(lambda change: update_image(), names='value')
+        metric_dropdown.observe(lambda change: update_plot(), names='value')
 
         # --- Zeitlabel-Update ---
         def update_time_label(idx):
@@ -2130,8 +3761,21 @@ class SpheroidSeries:
         # Wrapper für linksbündige Anzeige im Notebook
         outer_box = widgets.HBox([vbox], layout=widgets.Layout(width='100%', overflow_x='hidden'))
 
-        # Initial update
-        update_time_label(0)
-        update_image()
-        update_plot()
+        # Display first, then render initial content.
+        # In some notebook frontends the first Output draw can be dropped if done too early.
         display(outer_box)
+
+        def _initial_render():
+            update_time_label(time_slider.value)
+            update_image()
+            update_plot()
+
+        try:
+            from IPython import get_ipython
+            ip = get_ipython()
+            if ip is not None and hasattr(ip, "kernel") and hasattr(ip.kernel, "io_loop"):
+                ip.kernel.io_loop.add_callback(_initial_render)
+            else:
+                _initial_render()
+        except Exception:
+            _initial_render()

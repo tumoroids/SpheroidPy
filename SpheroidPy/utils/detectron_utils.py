@@ -57,7 +57,7 @@ class DownloadProgressBar:
         return self
     
     def __exit__(self, *args):
-        if self.pbar:
+        if self.pbar is not None:
             self.pbar.close()
     
     def update_to(self, b=1, bsize=1, tsize=None):
@@ -68,7 +68,7 @@ class DownloadProgressBar:
             bsize: Block size
             tsize: Total size (if known)
         """
-        if self.pbar:
+        if self.pbar is not None:
             if tsize is not None:
                 self.pbar.total = tsize
             self.pbar.update(b * bsize - self.pbar.n)
@@ -118,60 +118,108 @@ def download_detectron_weights(
         except Exception as e:
             raise FileNotFoundError(f"Failed to download weights from {url}: {e}")
     
-    # Extract only the target file from ZIP
-    logger.info(f"Extracting {weight_file} from ZIP...")
+    # Extract the best matching weight from ZIP.
+    # Historically, some archives ship weights under names like:
+    # - model_final.pth (non-IncuCyte)
+    # - model_final_Incu.pth (IncuCyte-specific)
+    # We always normalize the selected file to `weight_file` on disk.
+    logger.info(f"Extracting model weights from ZIP (target name on disk: {weight_file})...")
     try:
         with zipfile.ZipFile(weights_zip, 'r') as zip_ref:
-            # Find the target file in the ZIP
-            found = False
-            target_file_in_zip = None
-            
-            # First pass: find the file
-            for file in zip_ref.namelist():
-                # Check if this file matches our target (handle various path structures)
-                if (file.endswith(weight_file) or 
-                    os.path.basename(file) == weight_file or
-                    file == weight_file):
-                    target_file_in_zip = file
-                    found = True
-                    break
-            
-            if not found:
-                raise FileNotFoundError(f"{weight_file} not found in ZIP archive")
-            
-            # Extract the file
-            zip_ref.extract(target_file_in_zip, weights_dir)
-            extracted_path = weights_dir / target_file_in_zip
-            
-            # Move to final location if needed
-            final_path = weights_dir / weight_file
-            if extracted_path != final_path:
-                if extracted_path.exists():
-                    # Ensure target directory exists
-                    final_path.parent.mkdir(parents=True, exist_ok=True)
-                    # Move file
-                    if final_path.exists():
-                        final_path.unlink()  # Remove existing file if any
-                    shutil.move(str(extracted_path), str(final_path))
-                    # Try to remove empty parent directories
-                    try:
-                        parent = extracted_path.parent
-                        while parent != weights_dir and parent.exists():
-                            if not any(parent.iterdir()):  # Empty directory
-                                parent.rmdir()
-                                parent = parent.parent
-                            else:
-                                break
-                    except OSError:
-                        pass  # Ignore errors when removing directories
-                extracted_path = final_path
-            
-            if not final_path.exists():
+            namelist = list(zip_ref.namelist())
+
+            def _basename(p: str) -> str:
+                # Zip paths always use forward slashes.
+                return os.path.basename(p.rstrip("/"))
+
+            # Candidate mapping: choose non-IncuCyte if both exist.
+            # Order = priority.
+            preferred_basenames = [
+                weight_file,            # current expected canonical name
+                "model_final.pth",       # common non-Incu name in some zips
+                "model_final_Incu.pth",  # IncuCyte-specific (fallback only)
+            ]
+
+            # Build a list of zip entries whose basename matches one of the candidates
+            matches: list[str] = []
+            for entry in namelist:
+                b = _basename(entry)
+                if b in preferred_basenames:
+                    matches.append(entry)
+
+            if not matches:
                 raise FileNotFoundError(
-                    f"Extracted file not found at expected location: {final_path}"
+                    f"Could not find any known Detectron2 weight file in ZIP. "
+                    f"Expected one of: {preferred_basenames}. "
+                    f"Found examples: {namelist[:25]}"
                 )
-            
-            logger.info(f"Extracted {weight_file} to: {final_path}")
+
+            # Pick best match by preferred_basenames order (non-Incu first)
+            def _rank(entry: str) -> int:
+                b = _basename(entry)
+                try:
+                    return preferred_basenames.index(b)
+                except ValueError:
+                    return 999
+
+            matches.sort(key=_rank)
+            chosen_in_zip = matches[0]
+            chosen_base = _basename(chosen_in_zip)
+
+            if chosen_base == "model_final_Incu.pth":
+                logger.warning(
+                    "Detected only IncuCyte weight ('model_final_Incu.pth') or it was ranked best. "
+                    "Proceeding, but ensure this is the intended model."
+                )
+
+            # Extract chosen file
+            zip_ref.extract(chosen_in_zip, weights_dir)
+            extracted_path = weights_dir / chosen_in_zip
+            final_path = weights_dir / weight_file
+
+            # Normalize into weights_dir/weight_file (rename/move + overwrite)
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+            if final_path.exists():
+                final_path.unlink()
+            if extracted_path.exists():
+                shutil.move(str(extracted_path), str(final_path))
+            else:
+                # Some zip implementations may extract with different path handling;
+                # fall back to searching by basename in weights_dir.
+                fallback = next(weights_dir.rglob(chosen_base), None)
+                if fallback is None or not fallback.exists():
+                    raise FileNotFoundError(
+                        f"Extracted file '{chosen_base}' not found after extraction."
+                    )
+                shutil.move(str(fallback), str(final_path))
+
+            # Cleanup: remove any now-empty subfolders created by extraction
+            try:
+                # Remove the original extracted directory tree if present
+                parent = (weights_dir / chosen_in_zip).parent
+                while parent != weights_dir and parent.exists():
+                    if not any(parent.iterdir()):
+                        parent.rmdir()
+                        parent = parent.parent
+                    else:
+                        break
+            except OSError:
+                pass
+
+            # Optional cleanup: if the ZIP also contained the other variant,
+            # ensure we don't leave duplicate weight files around.
+            for extra_base in ("model_final.pth", "model_final_Incu.pth"):
+                extra_path = weights_dir / extra_base
+                if extra_path.exists() and extra_path.name != final_path.name:
+                    try:
+                        extra_path.unlink()
+                    except OSError:
+                        pass
+
+            if not final_path.exists():
+                raise FileNotFoundError(f"Extracted weight not found at expected location: {final_path}")
+
+            logger.info(f"Using Detectron2 weights: {final_path} (from ZIP entry: {chosen_in_zip})")
                 
     except Exception as e:
         raise FileNotFoundError(f"Failed to extract weights from ZIP: {e}")
@@ -224,11 +272,8 @@ def get_detectron_predictor(weights_dir: Optional[Path] = None) -> DefaultPredic
     
     # Get weights directory (relative to package root if not specified)
     if weights_dir is None:
-        # Use package-relative path: SpheroidPy/weights/
-        # __file__ is SpheroidPy/utils/detectron_utils.py
-        # parent is SpheroidPy/utils/
-        # parent.parent is SpheroidPy/
-        weights_dir = Path(__file__).parent.parent / 'weights'
+        # Use a user-writable shared location consistent with HRNet
+        weights_dir = Path.home() / ".spheroidpy" / "models"
     weight_file = 'detectron_model_final.pth'
     
     # Download weights if they don't exist

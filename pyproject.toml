@@ -1,21 +1,24 @@
 [project]
 name = "SpheroidPy"
 version = "0.1.0"
-description = "Python Package for the Analysis of Spheroid Imaging Data"
+description = "Python Package for the Spatial and Temporal Analysis of Spheroid Imaging Data"
 authors = [
     { name = "Cedric Heuermann", email = "cedric.heuermann@tumoroid.org" }
 ]
 readme = "README.md"
 requires-python = ">=3.10"
 
+license = { text = "GPL-3.0-or-later" }
+
 dependencies = [
     "h5py",
     "ipython",
     "ipywidgets",
+    "ipympl",
+    "PyQt5",
     "matplotlib",
-    "MeshPy",
     "numpy",
-    "opencv-python",        # oder opencv-python-headless
+    "opencv-python",
     "openpyxl",
     "pandas",
     "Pillow",
@@ -27,18 +30,20 @@ dependencies = [
     "tifffile",
     "tqdm",
     "tables",
-    "olefile"
+    "olefile",
+    "setuptools==68.2.2",
+    "torch==2.2.2", 
+    "torchvision==0.17.2"
 ]
 
 [project.optional-dependencies]
-detectron2 = ["detectron2"]
-pytorch = ["torch", "torchvision"]
-all = ["detectron2", "torch", "torchvision"]
+pde = ["MeshPy"]
+all = ["MeshPy"]
 
 [project.urls]
-homepage = "https://github.com/CedHe/SpheroidPy"
-repository = "https://github.com/CedHe/SpheroidPy"
-issues = "https://github.com/CedHe/SpheroidPy/issues"
+homepage = "https://tumoroid.org"
+repository = "https://github.com/tumoroids/SpheroidPy"
+issues = "https://github.com/tumoroids/SpheroidPy/issues"
 documentation = "https://tumoroid.org"  # optional
 
 
@@ -48,14 +53,8 @@ build-backend = "setuptools.build_meta"
 
 
 [tool.setuptools]
-packages = ["SpheroidPy", "SpheroidPy.spheroid", "SpheroidPy.spheroid.models", 
-            "SpheroidPy.experiment", "SpheroidPy.livecell", "SpheroidPy.utils"]
+packages = ["SpheroidPy", "SpheroidPy.spheroid",
+            "SpheroidPy.experiment", "SpheroidPy.utils"]
 
 [tool.setuptools.package-data]
-SpheroidPy = ["weights/*.pth", "static/images/*.png"]
-
-# Alternative: auto-discovery (falls explizite Liste Probleme macht)
-# [tool.setuptools.packages.find]
-# where = ["."]
-# include = ["SpheroidPy*"]
-# exclude = ["docs*", "examples*", "*.egg-info*", "SpheroidPy.egg-info*"]
+SpheroidPy = ["static/images/*.png"]

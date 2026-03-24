@@ -1,5 +1,6 @@
-from typing import Union
+from typing import Union, Optional
 import logging
+from difflib import get_close_matches
 
 # Detectron2 utilities
 from SpheroidPy.utils.detectron_utils import (
@@ -53,6 +54,7 @@ from scipy.ndimage import gaussian_filter1d
 
 from SpheroidPy.utils.visualisation import plot_mesh
 from SpheroidPy.utils.segmentation import ManualSegmentation
+from SpheroidPy.utils.image_histogram_viewer import ImageHistogramViewer
 from SpheroidPy.utils.pde_utils import compute_laplace_matrix, apply_dirichlet_boundary_conditions, get_boundary_nodes
 from SpheroidPy.utils.geometry import touches_border, fit_ellipse, remove_border_points, add_fitted_contour, find_inflection_point
 from SpheroidPy.utils.fluorescence_analysis import (
@@ -137,6 +139,9 @@ class SpheroidImage:
         # Storage for multiple-spheroid contours
         self._contours: list[np.ndarray] = []
         self._contours_scaled: list[np.ndarray] = []
+        # Per-channel intensity windows for display (mean/low/high in [0,255])
+        # Keys use the physical channel names: 'brightfield', 'fluorescence_green', ...
+        self.intensity_windows: dict[str, dict[str, float]] = {}
 
     def _initialize_channels(self, brightfield: Path | str = None, **kwargs):
         """
@@ -177,7 +182,8 @@ class SpheroidImage:
 
         for channel, path in channels.items():
             if path and os.path.exists(str(path)):
-                self.image_path_dict[channel] = Path(path)
+                # Store resolved absolute path (no ".." or "."), full system path
+                self.image_path_dict[channel] = Path(path).resolve()
             elif path:
                 logger.warning(f'Image path for channel "{channel}" does not exist: {path}')
         
@@ -233,7 +239,8 @@ class SpheroidImage:
             height_px, width_px = pixel_dims
             self.image_size = (float(width_px), float(height_px))
             
-        self.hdf5_path = kwargs.get('hdf5_path')
+        hdf5_path = kwargs.get('hdf5_path')
+        self.hdf5_path = Path(hdf5_path).resolve() if hdf5_path else None
         self.hdf5_key = kwargs.get('hdf5_key')
         self.analysis_results = {}
         self.contour = None
@@ -327,11 +334,11 @@ class SpheroidImage:
                         )
                     else:  # Default to Detectron2
                         logger.info(f"Using Detectron2 for AI segmentation (configured via Config.ai_segmentation)")
-                    self.contour = self.segmentation_detectron(
-                        channel,
-                        thres=kwargs.get('confidence', 0.65),
-                        border_margin=border_margin
-                    )
+                        self.contour = self.segmentation_detectron(
+                            channel,
+                            thres=kwargs.get('confidence', 0.65),
+                            border_margin=border_margin
+                        )
                 else:
                     logger.error(f"Unknown segmentation method '{seg_method}'. Supported methods: 'thresholding', 'ai'. Skipping.")
                     continue
@@ -425,7 +432,8 @@ class SpheroidImage:
             return
         
         try:
-            with h5py.File(self.hdf5_path, 'a') as hdf_file:
+            path_str = str(Path(self.hdf5_path).resolve())
+            with h5py.File(path_str, 'a') as hdf_file:
                 # Get or create the group for this spheroid image
                 if self.hdf5_key in hdf_file:
                     spheroid_image_group = hdf_file[self.hdf5_key]
@@ -466,10 +474,569 @@ class SpheroidImage:
         else:
             return read_image(str(self.image_path_dict[color_dict[color]]))
 
+    # ------------------------------------------------------------------ #
+    #  Intensity windowing / histogram viewer
+    # ------------------------------------------------------------------ #
+
+    def _get_channel_key(self, channel: str) -> str:
+        """
+        Map user-facing channel identifiers to internal channel keys.
+
+        Accepts:
+            - 'brightfield'
+            - 'green', 'red', 'blue'
+            - 'fluorescence_green', 'fluorescence_red', 'fluorescence_blue'
+        """
+        if channel == 'brightfield':
+            return 'brightfield'
+        if channel in ('green', 'red', 'blue'):
+            return f'fluorescence_{channel}'
+        if channel in ('fluorescence_green', 'fluorescence_red', 'fluorescence_blue'):
+            return channel
+        raise ValueError(f"Unsupported channel '{channel}'.")
+
+    def _build_lut_from_window(self, low: float, high: float) -> np.ndarray:
+        """Build uint8 LUT for a given [low, high] window in [0,255]."""
+        lo, hi = max(0.0, low), min(255.0, high)
+        t = np.arange(256, dtype=np.float32)
+        if hi > lo:
+            t = (t - lo) / (hi - lo) * 255.0
+        return np.clip(t, 0, 255).astype(np.uint8)
+
+    def _apply_window_to_raw(self, raw: np.ndarray, channel_key: str) -> np.ndarray:
+        """
+        Apply stored intensity window (if available) to a raw image for display.
+
+        The original data is not modified; this is only for visualization
+        (e.g. in show() / SpheroidSeries.show()).
+        """
+        cfg = self.intensity_windows.get(channel_key)
+        if cfg is None:
+            return raw
+
+        low = cfg.get('low', 0.0)
+        high = cfg.get('high', 255.0)
+
+        # Ensure grayscale uint8 for LUT application
+        if raw.ndim == 3:
+            gray = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = raw
+
+        if gray.dtype != np.uint8:
+            g_min, g_max = float(gray.min()), float(gray.max())
+            if g_max > g_min:
+                gray = ((gray - g_min) / (g_max - g_min) * 255.0).astype(np.uint8)
+            else:
+                gray = np.zeros_like(gray, dtype=np.uint8)
+
+        lut = self._build_lut_from_window(low, high)
+        stretched = lut[gray]
+
+        # Brightfield: klassische Graustufen (2D), keine künstliche Colormap
+        if channel_key == 'brightfield':
+            return stretched
+
+        # Fluoreszenz-Kanäle: gestreckte Intensität in den jeweiligen Farbkanal legen,
+        # so dass 'green', 'red', 'blue' weiterhin farbig erscheinen.
+        h, w = stretched.shape
+        bgr = np.zeros((h, w, 3), dtype=np.uint8)
+        idx_map = {
+            'fluorescence_blue': 0,
+            'fluorescence_green': 1,
+            'fluorescence_red': 2,
+        }
+        ch_idx = idx_map.get(channel_key, 1)
+        bgr[..., ch_idx] = stretched
+        return bgr
+
+    def display_channel(self, channel: str) -> np.ndarray | None:
+        """
+        Return a display-ready image for the given channel, applying any
+        previously configured intensity window for this SpheroidImage.
+
+        Used by higher-level show() helpers so that visualization respects
+        the chosen window width, while analysis functions still use the
+        original raw data.
+        """
+        key = self._get_channel_key(channel)
+        if key == 'brightfield':
+            raw = self.brightfield()
+        else:
+            color = key.split('_', 1)[1]
+            raw = self.fluorescence(color)
+        if raw is None:
+            return None
+        return self._apply_window_to_raw(raw, key)
+
+    def intensity(self,
+                  channel: str = 'brightfield',
+                  mean: float | None = None,
+                  value_range: tuple[float, float] | None = None,
+                  reset: bool = False,
+                  show: bool = True) -> np.ndarray:
+        """
+        Configure and apply an intensity window for display of a given channel.
+
+        Parameters
+        ----------
+        channel : str, default='brightfield'
+            Channel to adjust ('brightfield', 'green', 'red', 'blue',
+            or full keys like 'fluorescence_green').
+        mean : float | None
+            Optional initial mean intensity in [0,255]. If None, estimated
+            from the image.
+        value_range : (float, float) | None
+            Optional initial [low, high] window in [0,255]. If None, estimated
+            from the image around the mean.
+        reset : bool, default=False
+            If True, ignore any previously stored window for this channel and
+            recompute defaults from the image (unless mean/range are given).
+        show : bool, default=True
+            If True, open an interactive histogram window (ImageHistogramViewer)
+            to fine-tune mean and range. The chosen window is then stored in
+            ``self.intensity_windows`` for this channel.
+
+        Returns
+        -------
+        np.ndarray
+            Display-ready (windowed) grayscale image for this channel.
+        """
+        key = self._get_channel_key(channel)
+
+        # Load raw image for this channel
+        if key == 'brightfield':
+            raw = self.brightfield()
+        else:
+            color = key.split('_', 1)[1]
+            raw = self.fluorescence(color)
+        if raw is None:
+            raise ValueError(f"No image data available for channel '{channel}'.")
+
+        # Convert to grayscale uint8 for estimating / viewing
+        if raw.ndim == 3:
+            gray = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = raw
+        if gray.dtype != np.uint8:
+            g_min, g_max = float(gray.min()), float(gray.max())
+            if g_max > g_min:
+                gray = ((gray - g_min) / (g_max - g_min) * 255.0).astype(np.uint8)
+            else:
+                gray = np.zeros_like(gray, dtype=np.uint8)
+
+        # Determine initial window
+        cfg = None if reset else self.intensity_windows.get(key)
+        if cfg is None:
+            if mean is not None and value_range is not None:
+                low, high = value_range
+                mean_val = mean
+            else:
+                mean_val = float(np.mean(gray))
+                half = max(10.0, 2.0 * float(np.std(gray)))
+                low = float(np.clip(mean_val - half, 0, 253))
+                high = float(np.clip(mean_val + half, 2, 255))
+            cfg = {'mean': mean_val, 'low': low, 'high': high}
+        else:
+            mean_val = cfg.get('mean', float(np.mean(gray)))
+            low = cfg.get('low', 0.0)
+            high = cfg.get('high', 255.0)
+            if mean is not None:
+                mean_val = mean
+            if value_range is not None:
+                low, high = value_range
+            cfg = {'mean': mean_val, 'low': low, 'high': high}
+
+        # Optional interactive viewer
+        if show:
+            root = tk.Tk()
+            viewer = ImageHistogramViewer(root, images={key: gray}, initial_channel=key)
+            # Override with current window and update once
+            viewer.mean_val = cfg['mean']
+            viewer.low = cfg['low']
+            viewer.high = cfg['high']
+            viewer._update_display()
+            # Block until window is closed
+            root.mainloop()
+            # Read back final window
+            cfg = {
+                'mean': float(viewer.mean_val),
+                'low': float(viewer.low),
+                'high': float(viewer.high),
+            }
+
+        # Store configuration
+        self.intensity_windows[key] = cfg
+
+        # Apply window and return display-ready image
+        return self._apply_window_to_raw(raw, key)
+
+    def overlay(
+        self,
+        channel: str = 'brightfield',
+        overlay_channels:  str | list[str] | None = None,
+        increases:  float | list[float] | None = None,
+        base_increase: float = 1.0,
+        scalebar: bool | dict | None = True,
+        contour: bool = True,
+        exclude_out_of_contour: bool = True,
+        diffusion_dict: dict | None = None,
+        scale: float = 1.0,
+        dpi: int = 100,
+        savepath: str | None = None,
+    ) -> np.ndarray:
+        """
+        Create a single overlay image for this spheroid.
+
+        Parameters
+        ----------
+        channel : str, default='brightfield'
+            Base channel to display ('brightfield' or keys from ``image_path_dict``).
+        overlay_channels : str | list[str] | None
+            Single overlay channel or list of overlay channels to draw on top of the base image.
+            Typical entries:
+            - 'fluorescence_green', 'fluorescence_red', 'fluorescence_blue'
+            - 'diffusion' (uses :meth:`diffusion_stationary` with ``diffusion_dict``)
+        increases : float | list[float] | None
+            Single scaling factor or list of per-overlay intensity scaling factors
+            (same length as ``overlay_channels`` after Normalisierung).
+            For fluorescence overlays this is used as a multiplicative alpha factor.
+        base_increase : float, default=1.0
+            Optional global intensity scaling factor for the base channel. Values
+            > 1.0 brighten the base image, values between 0 and 1.0 darken it.
+            Implemented via ``cv2.convertScaleAbs`` for smooth clipping.
+        scalebar : bool | dict | None, default=True
+            Whether to draw a scalebar. If a dict is provided, it can contain
+            optional settings:
+                - ``length_um`` (float, default 250): physical length of scalebar.
+                - ``position`` (str, default 'bottom-right'): one of
+                  {'bottom-right', 'bottom-left', 'top-right', 'top-left'}.
+                - ``color`` (tuple[int, int, int], default (255,255,255)): BGR color.
+                - ``linewidth`` (float, default 2.5): line width in pixels.
+                - ``font_scale`` (float, default 0.8): OpenCV font scale for label.
+                - ``margin_frac`` (float, default 0.05): fractional margin to border.
+            The visual style matches the scalebar used in :meth:`show`, but with
+            configurable size and position similar to matplotlib legend options.
+        scale : float, default=1.0
+            Optional scaling factor for the exported image size. Values > 1.0
+            create a higher-resolution copy (e.g. 2.0 → 2x width/height).
+            When ``scale != 1``, the final compositing is done via matplotlib
+            to avoid additional interpolation artifacts.
+        dpi : int, default=100
+            DPI used when rendering via matplotlib (scalebar and/or scaling).
+            Controls the physical size of the figure but not the pixel size,
+            which is determined by ``scale`` and the original image dimensions.
+        contour : bool, default=True
+            Whether to draw the spheroid contour (if available) in white.
+        exclude_out_of_contour : bool, default=True
+            When True, fluorescence overlays are masked to the interior of the contour.
+        diffusion_dict : dict | None
+            Parameters for the 'diffusion' overlay. Expected keys are the same as in
+            :meth:`SpheroidSeries.export_video`, e.g.:
+                - 'diffusion_rate', 'reaction_rate', 'boundary_value'
+                - optional: 'cmap', 'contour_line_value', 'contour_line_name'
+        savepath : str | None
+            Optional path to save the resulting overlay image (using ``cv2.imwrite``).
+
+        Returns
+        -------
+        np.ndarray
+            The combined BGR image (as used by OpenCV) containing all overlays.
+        """
+        from matplotlib.colors import Normalize
+
+        # Normalize overlay_channels input: accept single string or list of strings
+        if isinstance(overlay_channels, str):
+            overlay_channels = [overlay_channels]
+        elif overlay_channels is None:
+            overlay_channels = []
+
+        # Normalize increases input: accept single float/int or list of floats
+        if isinstance(increases, (int, float)):
+            increases = [float(increases)] * len(overlay_channels)
+        elif increases is None:
+            increases = [1.0] * len(overlay_channels)
+
+        # Safety: keep lengths in sync
+        if len(increases) != len(overlay_channels):
+            logger.warning(
+                "Length mismatch between overlay_channels (%d) and increases (%d). "
+                "Truncating/padding increases with 1.0.",
+                len(overlay_channels),
+                len(increases),
+            )
+            if len(increases) < len(overlay_channels):
+                increases = list(increases) + [1.0] * (len(overlay_channels) - len(increases))
+            else:
+                increases = list(increases[: len(overlay_channels)])
+
+        diffusion_dict = diffusion_dict or {}
+
+        # Load base image
+        if channel not in self.image_path_dict:
+            raise ValueError(f"Channel '{channel}' not found in image_path_dict.")
+
+        base_image_array = cv2.imread(str(self.image_path_dict[channel]))[1:-1]
+        if base_image_array is None:
+            raise ValueError(f"Failed to load base image for channel '{channel}'.")
+
+        combined_image = base_image_array.copy()
+        height, width = combined_image.shape[:2]
+
+        # Optional intensity scaling for base image via convertScaleAbs
+        if base_increase != 1.0:
+            combined_image = cv2.convertScaleAbs(
+                combined_image,
+                alpha=float(base_increase),
+                beta=0.0,
+            )
+
+        # Optional contour overlay
+        if contour and self.contour is not None:
+            cv2.drawContours(
+                combined_image,
+                [self.contour.reshape((-1, 1, 2)).astype(np.int32)],
+                -1,
+                (255, 255, 255),
+                2,
+            )
+
+        color_map = {'red': (0, 0, 255), 'green': (0, 255, 0), 'blue': (255, 0, 0)}
+
+        # Overlays
+        for overlay_channel, increase in zip(overlay_channels, increases):
+            # Fluorescence overlays
+            if overlay_channel.split('_')[0] == 'fluorescence':
+                try:
+                    fluo_img = cv2.imread(
+                        str(self.image_path_dict[overlay_channel]),
+                        cv2.IMREAD_GRAYSCALE,
+                    )[: len(combined_image)]
+                except Exception:
+                    continue
+
+                overlay_colored = np.stack(
+                    [np.zeros_like(fluo_img, dtype=np.uint8)] * 3, axis=-1
+                )
+                color_key = overlay_channel.split('_')[1]
+                rgb_tuple = color_map.get(color_key, (0, 255, 0))
+
+                for c, value in enumerate(rgb_tuple):
+                    chan = (fluo_img * value).astype(np.uint8)
+                    chan = np.clip(chan, 0, 255)
+
+                    # Optional masking to contour interior
+                    if exclude_out_of_contour and self.contour is not None:
+                        mask = np.zeros_like(chan, dtype=np.uint8)
+                        cv2.drawContours(
+                            mask,
+                            [self.contour.reshape((-1, 1, 2)).astype(np.int32)],
+                            -1,
+                            255,
+                            thickness=cv2.FILLED,
+                        )
+                        chan = cv2.bitwise_and(chan, chan, mask=mask)
+
+                    overlay_colored[:, :, c] = chan
+
+                alpha = fluo_img / 255.0 * float(increase)
+                alpha = np.clip(alpha, 0, 1)
+
+                for c in range(3):
+                    combined_image[:, :, c] = (
+                        (1 - alpha) * combined_image[:, :, c]
+                        + alpha * overlay_colored[:, :, c]
+                    ).astype(np.uint8)
+
+            # Diffusion overlay
+            if overlay_channel == 'diffusion' and self.contour is not None:
+                if not diffusion_dict:
+                    continue
+                points, triangles, solution = self.diffusion_stationary(
+                    diffusion_rate=diffusion_dict.get('diffusion_rate', 1000),
+                    reaction_rate=diffusion_dict.get('reaction_rate', 0.1),
+                    boundary_value=diffusion_dict.get('boundary_value', 10),
+                    plot=False,
+                    accuracy=diffusion_dict.get('accuracy', 30),
+                    threshold_concentration=diffusion_dict.get('contour_line_value'),
+                    savepath=None,
+                )
+
+                fig, ax = plt.subplots(
+                    figsize=(width / 100, height / 100), dpi=100
+                )
+                ax.axis('off')
+                fig.tight_layout(pad=0)
+
+                ax.imshow(cv2.cvtColor(combined_image, cv2.COLOR_BGR2RGB))
+                cmap = diffusion_dict.get('cmap', 'viridis')
+                ax.tricontourf(
+                    points[:, 0],
+                    points[:, 1],
+                    triangles,
+                    solution,
+                    levels=100,
+                    cmap=cmap,
+                    alpha=0.1 * float(increase),
+                    norm=Normalize(
+                        vmin=0, vmax=diffusion_dict.get('boundary_value', 10), clip=False
+                    ),
+                )
+                if 'contour_line_value' in diffusion_dict:
+                    ax.tricontour(
+                        points[:, 0],
+                        points[:, 1],
+                        triangles,
+                        solution,
+                        levels=[diffusion_dict['contour_line_value']],
+                        colors='blue',
+                        linestyle='dotted',
+                        linewidths=1,
+                    )
+                    if 'contour_line_name' in diffusion_dict:
+                        ax.plot(
+                            [],
+                            [],
+                            color='blue',
+                            linestyle='solid',
+                            linewidth=1,
+                            label=diffusion_dict['contour_line_name'],
+                        )
+                        ax.legend(prop={'size': 10})
+
+                plt.xlim(0, width)
+                plt.ylim(height, 0)
+
+                fig.canvas.draw()
+                plot_image = np.frombuffer(
+                    fig.canvas.tostring_rgb(), dtype=np.uint8
+                )
+                plot_image = plot_image.reshape(
+                    fig.canvas.get_width_height()[::-1] + (3,)
+                )
+                combined_image = cv2.cvtColor(plot_image, cv2.COLOR_RGB2BGR)
+                plt.close(fig)
+
+        # Final compositing / optional scalebar via matplotlib so that we can
+        # render a proper "µ" symbol and optionally scale the export.
+        use_mpl = (scalebar and hasattr(self, "image_size") and self.image_size is not None) or (scale != 1.0)
+        if use_mpl:
+            # Resolve scalebar config
+            if isinstance(scalebar, dict):
+                sb_cfg = scalebar
+            elif scalebar:
+                sb_cfg = {}
+            else:
+                sb_cfg = None
+
+            # Compute physical mapping for scalebar
+            if sb_cfg is not None:
+                length_um = float(sb_cfg.get("length_um", 250.0))
+                position = sb_cfg.get("position", "bottom-right")
+                color_bgr = tuple(sb_cfg.get("color", (255, 255, 255)))
+                linewidth = float(sb_cfg.get("linewidth", 2.5))
+                margin_frac = float(sb_cfg.get("margin_frac", 0.05))
+                font_size = float(sb_cfg.get("font_scale", 10.0))
+            else:
+                length_um = 250.0
+                position = "bottom-right"
+                color_bgr = (255, 255, 255)
+                linewidth = 2.5
+                margin_frac = 0.05
+                font_size = 10.0
+
+            width_um = float(self.image_size[0]) if self.image_size[0] else float(width)
+            px_per_um = width / max(width_um, 1e-6)
+            scale_bar_length = float(length_um * px_per_um)
+
+            margin_x = margin_frac * width
+            margin_y = margin_frac * height
+
+            pos = position.lower()
+            if pos == "bottom-left":
+                x_left = margin_x
+                x_right = margin_x + scale_bar_length
+                y_bar = height - margin_y
+                text_y = y_bar - 0.03 * height
+            elif pos == "top-left":
+                x_left = margin_x
+                x_right = margin_x + scale_bar_length
+                y_bar = margin_y
+                text_y = y_bar - 0.03 * height
+            elif pos == "top-right":
+                x_right = width - margin_x
+                x_left = x_right - scale_bar_length
+                y_bar = margin_y
+                text_y = y_bar - 0.03 * height
+            else:  # default bottom-right
+                x_right = width - margin_x
+                x_left = x_right - scale_bar_length
+                y_bar = height - margin_y
+                text_y = y_bar - 0.03 * height
+
+            # Render via matplotlib at desired scale
+            out_w = int(width * max(scale, 1.0))
+            out_h = int(height * max(scale, 1.0))
+            fig_w = out_w / dpi
+            fig_h = out_h / dpi
+
+            fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
+            ax.axis("off")
+            ax.imshow(
+                cv2.cvtColor(combined_image, cv2.COLOR_BGR2RGB),
+                extent=[0, width, height, 0],
+            )
+
+            if sb_cfg is not None:
+                # Draw scalebar line and label with proper µ symbol
+                color_rgb = tuple(c / 255.0 for c in color_bgr)
+                ax.plot(
+                    [x_left, x_right],
+                    [y_bar, y_bar],
+                    color=color_rgb,
+                    linewidth=linewidth,
+                    solid_capstyle="butt",
+                )
+                # Label text with µ using mathtext
+                if float(length_um).is_integer():
+                    length_label = int(length_um)
+                else:
+                    length_label = length_um
+                label_text = rf"{length_label} $\mu$m"
+                ax.text(
+                    0.5 * (x_left + x_right),
+                    text_y,
+                    label_text,
+                    color=color_rgb,
+                    ha="center",
+                    va="top",
+                    fontsize=font_size,
+                )
+
+            fig.tight_layout(pad=0)
+            fig.canvas.draw()
+            plot_image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            plot_image = plot_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            combined_image = cv2.cvtColor(plot_image, cv2.COLOR_RGB2BGR)
+            plt.close(fig)
+        else:
+            # No scalebar and no scaling requested → optionally resize via OpenCV
+            if scale != 1.0:
+                out_w = int(width * scale)
+                out_h = int(height * scale)
+                interp = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
+                combined_image = cv2.resize(combined_image, (out_w, out_h), interpolation=interp)
+
+        if savepath is not None:
+            cv2.imwrite(savepath, combined_image)
+
+        return combined_image
+
     def radial_profile(self, channels: list = ['green', 'red'], plot: bool = True, 
                         normalize: bool = True, 
                       return_absolute: bool = False, smoothing: float = 2,
-                      savepath: str | None = None, nbins: int = 200) -> dict:
+                      savepath: str | None = None, nbins: int = 200,
+                      ax: Optional[plt.Axes] = None) -> dict | tuple[dict, plt.Axes]:
         """Calculate the radial intensity profile via 2D shell averaging with Distance-to-Boundary (DTB).
         
         Uses normalized radial bins (ρ = d_in / R_max, where ρ=0 at center, ρ=1 at boundary).
@@ -496,13 +1063,21 @@ class SpheroidImage:
                       Applied before normalization.
             savepath: Optional path to save the plot. If None, plot is only displayed.
             nbins: Number of radial bins (default: 200)
+            ax: Optional matplotlib Axes object to plot on. If provided and ``plot=True``,
+                the plot is drawn onto this axes and *no* ``plt.show()`` is called
+                (analog zum Verhalten von :meth:`metric`). Wird kein ``ax`` übergeben,
+                wird eine neue Figure/Axes erzeugt und nach dem Plot angezeigt.
             
         Returns:
+            dict | tuple[dict, plt.Axes]
             Dictionary containing:
-                mean_radius: Outer radius estimate in μm (max mask radius)
+                mean_radius: Outer radius estimate in μm (max(distance_transform_edt(mask)))
                 intensity_profiles: Dictionary of intensity profiles for each channel
                 relative_distances: Bin centers normalized to [0,1] (ρ values)
                 absolute_distances: Absolute distances in μm (if return_absolute=True)
+            
+            If ``plot=True``, returns a tuple ``(result_dict, ax)`` where ``ax`` is the matplotlib
+            Axes object used for plotting. If ``plot=False``, returns only the dictionary.
         """
         # Require a valid contour/mask
         if self.contour is None or len(self.contour) < 3:
@@ -681,13 +1256,27 @@ class SpheroidImage:
         
         # Absolute distances in μm (convert normalized ρ back to physical distance)
         # Use mean_radius_um (already in μm) for conversion: absolute_dist = ρ * mean_radius_um
+        # Shift so that x-axis starts at (effective_radius - morphological_radius) instead of 0
         absolute_distances = None
         if return_absolute and mean_radius_um > 0:
-            absolute_distances = rho_centers * mean_radius_um
+            # Get effective radius (equivalent radius)
+            effective_radius = self.radius if self.radius is not None else mean_radius_um
+            # Calculate shift: difference between effective and morphological radius
+            radius_shift = effective_radius - mean_radius_um
+            # Convert normalized ρ to absolute distance and shift
+            absolute_distances = rho_centers * mean_radius_um + radius_shift
 
         # Optional plotting
+        fig: Optional[plt.Figure] = None
         if plot:
-            fig, ax = plt.subplots()
+            # Axes-Handling ähnlich wie in metric() und radial_profile() in spheroid_series:
+            # - Wenn ax=None: neue Figure/Axes erstellen und am Ende plt.show() aufrufen.
+            # - Wenn ax vorhanden: darauf zeichnen, keine neue Figure anzeigen.
+            if ax is None:
+                fig, ax = plt.subplots()
+            else:
+                fig = ax.figure
+            
             if return_absolute and absolute_distances is not None:
                 x_plot = absolute_distances  # µm
                 xlabel = 'Distance (µm)'
@@ -733,6 +1322,11 @@ class SpheroidImage:
                     std = intensity_smooth[channel]['std_absolute']
                     ylabel = 'Intensity (a.u.)'
                 
+                color_dict={
+                    'green': 'green',
+                    'red': '#aa0000',
+                    'blue': 'blue',
+                }
                 label = label_map.get(channel, channel.upper())
                 line = current_ax.plot(x_plot, mean, label=label, color=channel)
                 current_ax.fill_between(x_plot, mean - std, mean + std, alpha=0.2, color=channel)
@@ -772,18 +1366,31 @@ class SpheroidImage:
             else:
                 ax.legend(loc='best')
             
-            plt.tight_layout()
-            if savepath is not None:
-                plt.savefig(savepath, transparent=True, dpi=300, bbox_inches='tight')
-            plt.show()
+            if fig is not None:
+                fig.tight_layout()
+                if savepath is not None:
+                    fig.savefig(savepath, transparent=True, dpi=300, bbox_inches='tight')
+                # Nur anzeigen, wenn wir die Figure selbst erzeugt haben
+                plt.show()
+            else:
+                # ax wurde extern übergeben – dennoch speichern, falls gewünscht
+                if savepath is not None:
+                    ax.figure.savefig(savepath, transparent=True, dpi=300, bbox_inches='tight')
 
         result = {
-            'mean_radius': mean_radius_um,               # μm
+            'mean_radius': mean_radius_um,               # μm (morphological radius)
+            'effective_radius': self.radius if self.radius is not None else mean_radius_um,  # μm (equivalent radius)
             'intensity_profiles': intensity_smooth,
             'relative_distances': relative_distances,    # 0..1
         }
         if return_absolute and absolute_distances is not None:
             result['absolute_distances'] = absolute_distances
+        
+        # Optionales zweites Rückgabe-Objekt: Plot-Handle (ax),
+        # aber nur, wenn tatsächlich geplottet wurde (plot=True).
+        if plot:
+            return result, ax
+        # plot=False → reine Datenrückgabe wie früher
         return result
 
     def thr_radius(self, channel: str, thr: float, plot: bool = False,
@@ -1297,6 +1904,110 @@ class SpheroidImage:
         else:
             return None
 
+    def metric(self, name: str, ignore_border: bool = False) -> float | tuple[float, float] | None:
+        """
+        Calculate a metric value for this spheroid image.
+        
+        This is the central metric calculation function that can be called from
+        higher-level classes (SpheroidSeries, SpheroidCollection, etc.).
+        
+        Parameters
+        ----------
+        name : str
+            Name of the metric to calculate. Available metrics:
+            - 'radius': Effective radius (sqrt(Area/π)) in μm
+            - 'area': Area enclosed by contour in μm²
+            - 'fluorescence_green', 'fluorescence_red', 'fluorescence_blue': 
+              Returns tuple (cumulative, mean) intensity
+            - 'fluorescence_green_mean', 'fluorescence_red_mean', 'fluorescence_blue_mean':
+              Returns mean intensity only
+            - 'fluorescence_green_cumulative', 'fluorescence_red_cumulative', 'fluorescence_blue_cumulative':
+              Returns cumulative intensity only
+        ignore_border : bool, default=False
+            Whether to exclude spheroids that touch image border. If True, returns None for all metrics
+            when the spheroid touches the border. If False, metrics are calculated regardless of border contact.
+        
+        Returns
+        -------
+        float | tuple[float, float] | None
+            - For 'radius' and 'area': float value in μm or μm², or None if invalid
+            - For fluorescence metrics without suffix: tuple (cumulative, mean) or (None, None)
+            - For fluorescence metrics with _mean or _cumulative: float or None
+            - None if metric cannot be calculated
+        
+        Raises
+        ------
+        ValueError
+            If the metric name is not recognized. Includes suggestions for similar names.
+        """
+        # Define available metrics
+        available_metrics = [
+            'radius',
+            'area',
+            'fluorescence_green',
+            'fluorescence_red',
+            'fluorescence_blue',
+            'fluorescence_green_mean',
+            'fluorescence_green_cumulative',
+            'fluorescence_red_mean',
+            'fluorescence_red_cumulative',
+            'fluorescence_blue_mean',
+            'fluorescence_blue_cumulative',
+        ]
+        
+        # Check if metric exists
+        if name not in available_metrics:
+            # Find similar metrics
+            similar = get_close_matches(name, available_metrics, n=1, cutoff=0.6)
+            
+            error_msg = f"Metric '{name}' not available."
+            if similar:
+                error_msg += f"\n\nDid you mean '{similar[0]}'?"
+            error_msg += f"\n\nAvailable Metrics: {', '.join(available_metrics)}"
+            raise ValueError(error_msg)
+        
+        # Check if spheroid touches border and ignore_border is True
+        if ignore_border and self.contour_touches_border:
+            return None
+        
+        # Handle basic metrics
+        if name == 'radius':
+            return self.radius
+        elif name == 'area':
+            return self.area
+        
+        # Handle fluorescence metrics
+        parts = name.split('_')
+        if parts[0] == 'fluorescence' and len(parts) >= 2:
+            color = parts[1]  # 'green', 'red', or 'blue'
+            
+            # Check if specific kind is requested
+            if len(parts) >= 3:
+                kind = parts[2]  # 'mean' or 'cumulative'
+            else:
+                kind = None
+            
+            # Get fluorescence values
+            try:
+                cum, mean = self.metric_fluorescence(color, ignore_border=ignore_border)
+            except Exception as e:
+                logger.warning(f"Failed to calculate fluorescence metric for {color}: {e}")
+                if kind:
+                    return None
+                return (None, None)
+            
+            # Return based on requested kind
+            if kind == 'mean':
+                return mean
+            elif kind == 'cumulative':
+                return cum
+            else:
+                # Return both as tuple
+                return (cum, mean)
+        
+        # Should not reach here, but just in case
+        raise ValueError(f"Metric '{name}' could not be processed.")
+
     def metric_fluorescence(self, 
                            fluorescence_color: str = 'green', 
                            ignore_border: bool = False) -> tuple[float | None, float | None]:
@@ -1446,6 +2157,7 @@ class SpheroidImage:
         Returns:
             np.ndarray of contour, or None if segmentation fails.
         """
+
         if not HRNET_AVAILABLE or torch is None:
             raise ImportError(
                 "PyTorch is not installed. Please install PyTorch to use HRNet segmentation."
@@ -1605,66 +2317,6 @@ class SpheroidImage:
 
         return self.contour
 
-    def segmentation_detectron_alt(self, channel: str, thres: float = .65, border_margin: int = 5):
-        """Segment spheroid using Detectron2 instance segmentation model.
-        
-        Uses a pre-trained Mask R-CNN model to detect and segment the spheroid.
-        
-        Args:
-            channel: Image channel to use for segmentation
-            thres: Detection confidence threshold
-            
-        Returns:
-            tuple: (contour, touches_border) where contour is array of boundary points
-            and touches_border indicates if spheroid extends beyond image bounds
-        """
-        # Option 1: Using pkg_resources
-        weight = pkg_resources.resource_filename('SpheroidPy', 'weights/detectron_model_final.pth')
-
-        # Option 2: Using __file__ and Path
-        #weight = str(Path(__file__).parent.parent / 'weights' / 'detectron_model_final.pth')
-
-        cfg = get_cfg()
-        cfg.MODEL.DEVICE = 'cpu'
-
-        cfg.DATALOADER.NUM_WORKERS = 2
-        cfg.SOLVER.IMS_PER_BATCH = 4
-        cfg.SOLVER.MAX_ITER = 500
-        cfg.SOLVER.STEPS = []
-        cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256
-        cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
-        cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
-        cfg.MODEL.WEIGHTS = os.path.join(weight)  # path to the model we just trained
-        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = thres  # set a custom testing threshold
-
-        predictor = DefaultPredictor(cfg)
-
-        image = read_image(str(self.image_path_dict[channel]))
-        height, width = image.shape[0], image.shape[1]
-        self._height, self._width = height, width
-
-        #######
-        outputs = predictor(image)
-        #######
-
-        contours = []
-        for pred_mask in outputs["instances"].to("cpu").pred_masks:
-            # pred_mask is of type torch.Tensor, and the values are boolean (True, False)
-            # Convert it to a 8-bit numpy array, which can then be used to find contours
-            mask = pred_mask.numpy().astype('uint8')
-            # Speichern der Maske als TIFF-Datei
-            #tiff.imwrite(f'/Users/cedric/Desktop/Training_Data/Hep3B/mask/Hep3B_{self.well}_mask.tif', mask)
-            contour, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-
-            contours.append(contour[0])  # contour is a tuple (OpenCV 4.5.2), so take the first element which is the array of contour points
-
-        contour = contours[0].reshape(-1, 2).astype(np.float32)
-        border_bool = touches_border(contour, width - 10, height - 10)
-        #print(border_bool, width, height)
-        if border_bool:
-            contour = remove_border_points(contour, width - 10, height - 10)
-        return contour, border_bool
-
     def segmentation_thresholding(self, channel: str, thres: float = 1.35,
                                   thres_yen: bool = True, border_margin: int = 5) -> np.ndarray | None:
         """Segment spheroid using thresholding methods.
@@ -1809,119 +2461,6 @@ class SpheroidImage:
 
         return self.contour
 
-    def segmentation_thresholding_multiplespheroids(self,channel: str,thres: float = 1.35,thres_yen: bool = True,border_margin: int = 5,
-        min_size: int = 500,
-        use_convex_hull: bool = True,
-        gaussian_sigma: float = 1.2,
-        local_block_size: int = 75,
-        local_offset: float = 10,
-        contour_smoothing_sigma: float = 1.0,
-        ) -> list[np.ndarray]:
-        """
-        Improved threshold-based segmentation for multiple spheroids in 2D images.
-
-        Combines global + local thresholding, improved morphological cleanup,
-        and robust contour extraction with optional convex hull refinement.
-        """
-
-        if channel not in self.image_path_dict:
-            raise ValueError(f"Channel '{channel}' not found.")
-
-        img_path = str(self.image_path_dict[channel])
-        img = read_image(img_path, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            raise IOError(f"Failed to load image: {img_path}")
-
-        # Normalize fluorescence images
-        if "fluorescence" in channel:
-            img_min, img_max = img.min(), img.max()
-            if img_max - img_min >= 10:
-                img = ((img - img_min) / (img_max - img_min) * 255).astype(np.uint8)
-
-        # Determine dark/bright objects
-        if channel == "brightfield":
-            is_dark = True
-        elif "fluorescence" in channel:
-            is_dark = False
-        else:
-            is_dark = np.mean(img) < 128
-
-        # --- PREPROCESSING ---
-        img_smooth = cv2.GaussianBlur(img, (0, 0), gaussian_sigma)
-
-        # --- GLOBAL THRESHOLD ---
-        gth = threshold_yen(img_smooth) if thres_yen else threshold_otsu(img_smooth)
-        gth = gth * thres
-        global_mask = img_smooth < gth if is_dark else img_smooth > gth
-
-        # --- LOCAL THRESHOLD Fallback ---
-        local_th = threshold_local(img_smooth, block_size=local_block_size, offset=local_offset)
-        local_mask = img_smooth < local_th if is_dark else img_smooth > local_th
-
-        # Combine masks (robust in heterogeneous lighting)
-        bool_mask = global_mask | local_mask
-
-        # --- MORPHOLOGY ---
-        # binary_opening and binary_closing from skimage don't support iterations parameter
-        # So we call them multiple times
-        bool_mask = binary_opening(bool_mask)  # iterations=1, so just one call
-        for _ in range(2):
-            bool_mask = binary_closing(bool_mask)
-        bool_mask = binary_fill_holes(bool_mask)
-        bool_mask = remove_small_objects(bool_mask, min_size=min_size)
-
-        # --- LABELING ---
-        labeled, num = label(bool_mask)
-        if num == 0:
-            self._contours = []
-            self._contours_scaled = []
-            return []
-
-        height, width = img.shape
-        contours_list: list[np.ndarray] = []
-
-        for label_id in range(1, num + 1):
-            component = labeled == label_id
-            if component.sum() < min_size:
-                continue
-
-            comp_contours = find_contours(component.astype(float), 0.5)
-            if not comp_contours:
-                continue
-
-            # Largest contour = outer boundary
-            comp_contours.sort(key=lambda c: len(c), reverse=True)
-            contour = np.array(comp_contours[0], dtype=np.float32)
-            contour_xy = np.column_stack((contour[:, 1], contour[:, 0]))
-
-            # --- OPTIONAL CONVEX HULL ---
-            if use_convex_hull and len(contour_xy) >= 3:
-                hull = cv2.convexHull(contour_xy.astype(np.float32))
-                hull_area = cv2.contourArea(hull)
-                raw_area = cv2.contourArea(contour_xy)
-                # Apply convex hull only if it improves shape significantly
-                if raw_area > 0 and hull_area / raw_area < 1.25:
-                    contour_xy = hull.reshape(-1, 2)
-
-            # --- OPTIONAL SMOOTHING ---
-            if contour_smoothing_sigma > 0:
-                from scipy.ndimage import gaussian_filter1d
-                contour_xy[:, 0] = gaussian_filter1d(contour_xy[:, 0], contour_smoothing_sigma)
-                contour_xy[:, 1] = gaussian_filter1d(contour_xy[:, 1], contour_smoothing_sigma)
-
-            # --- BORDER HANDLING ---
-            if touches_border(contour_xy, width - border_margin, height - border_margin):
-                # Skip objects touching the border instead of deleting points
-                continue
-
-            if len(contour_xy) > 2:
-                contours_list.append(contour_xy)
-
-        self._contours = contours_list
-        self._contours_scaled = self._compute_scaled_contours(contours_list)
-        
-        return contours_list
-
     def _compute_scaled_contours(self, contours: list[np.ndarray]) -> list[np.ndarray]:
         """Scale contours from pixel to physical coordinates (μm) if possible."""
         scaled = []
@@ -1939,62 +2478,6 @@ class SpheroidImage:
             c[:, 1] = height_um - (c[:, 1] / max(1, height_px - 1)) * height_um
             scaled.append(c)
         return scaled
-
-    def _show_multiple(self, channel: str = "brightfield", savepath: str | None = None) -> None:
-        """Plot multiple spheroid contours over the given channel."""
-        if channel not in self.image_path_dict:
-            raise ValueError(f"Channel '{channel}' not found.")
-
-        img = read_image(str(self.image_path_dict[channel]), cv2.IMREAD_UNCHANGED)
-        if img is None:
-            raise IOError(f"Failed to load image from path: {self.image_path_dict[channel]}")
-
-        if img.ndim == 2:
-            disp = img
-            cmap = "gray"
-        else:
-            disp = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            cmap = None
-
-        height_px, width_px = img.shape[:2]
-        if hasattr(self, "image_size") and self.image_size is not None:
-            height_um = float(self.image_size[1])
-            width_um = float(self.image_size[0])
-            sx = width_um / max(1, width_px)
-            sy = height_um / max(1, height_px)
-        else:
-            height_um = float(height_px)
-            width_um = float(width_px)
-            sx = sy = 1.0
-
-        plt.figure(figsize=(6, 6 * (height_um / width_um if width_um else 1)))
-        # Show with correct orientation (origin at top-left like the image)
-        plt.imshow(disp, extent=[0, width_um, 0, height_um], origin="upper", cmap=cmap)
-
-        # Choose scaled contours if available
-        contours_to_plot = self._contours_scaled if self._contours_scaled else self._contours
-        for contour in contours_to_plot:
-            if contour is None or len(contour) < 2:
-                continue
-            cx = contour[:, 0].astype(float)
-            cy = contour[:, 1].astype(float)
-            if contours_to_plot is self._contours:
-                # convert px to μm if using pixel coords
-                cx = cx * sx
-                cy = cy * sy
-            if cx[0] != cx[-1] or cy[0] != cy[-1]:
-                cx = np.r_[cx, cx[:1]]
-                cy = np.r_[cy, cy[:1]]
-            plt.plot(cx, cy, '-', linewidth=1.5)
-
-        plt.xlabel("x [μm]")
-        plt.ylabel("y [μm]")
-        plt.title(f"Multiple spheroid contours ({channel})")
-        plt.tight_layout()
-        if savepath is not None:
-            plt.savefig(savepath, transparent=True, dpi=300, bbox_inches="tight")
-        plt.show()
-
 
     def segmentation_manual(self, channel: str):
         """

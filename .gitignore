@@ -2,6 +2,5 @@
 /.conda/
 /.ipynb_checkpoints/
 /SpheroidPy/weights
-/SpheroidPy/application
-/SpheroidPy/application_ctk
-/figures/
+/SpheroidPy/spheroid/models
+/examples

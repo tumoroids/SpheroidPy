@@ -3,6 +3,7 @@
 import logging
 import os
 import urllib.request
+import urllib.parse
 from pathlib import Path
 from typing import Optional
 
@@ -37,7 +38,7 @@ class DownloadProgressBar:
         return self
     
     def __exit__(self, *args):
-        if self.pbar:
+        if self.pbar is not None:
             self.pbar.close()
     
     def update_to(self, b=1, bsize=1, tsize=None):
@@ -48,7 +49,7 @@ class DownloadProgressBar:
             bsize: Block size
             tsize: Total size (if known)
         """
-        if self.pbar:
+        if self.pbar is not None:
             if tsize is not None:
                 self.pbar.total = tsize
             self.pbar.update(b * bsize - self.pbar.n)
@@ -798,8 +799,8 @@ def download_hrnet_weights(
         logger.info(f"HRNet model weights found at: {weight_path}")
         return weight_path
     
-    # URL for downloading weights
-    url = "https://dl.dropboxusercontent.com/s/b7ssl9a3wxezahx/HRNet%20Seg.pth?dl=0"
+    # URL for downloading weights (force direct file download)
+    url = "https://www.dropbox.com/s/b7ssl9a3wxezahx/HRNet%20Seg.pth?dl=1"
     
     # Create weights directory if it doesn't exist
     os.makedirs(weights_dir, exist_ok=True)
@@ -819,8 +820,37 @@ def download_hrnet_weights(
     
     if not weight_path.exists():
         raise FileNotFoundError(f"Weight file not found after download: {weight_path}")
+
+    # Basic sanity check to catch HTML/error pages saved as .pth
+    _validate_weight_file(weight_path)
     
     return weight_path
+
+
+def _validate_weight_file(weight_path: Path) -> None:
+    """Validate that the downloaded weights file looks like a binary model file."""
+    try:
+        size = weight_path.stat().st_size
+    except Exception as e:
+        raise FileNotFoundError(f"Cannot access weights file: {weight_path} ({e})")
+
+    # Tiny files are almost certainly broken downloads or HTML responses
+    if size < 1024:
+        raise RuntimeError(f"Weights file is unexpectedly small ({size} bytes): {weight_path}")
+
+    try:
+        with open(weight_path, "rb") as f:
+            head = f.read(512)
+    except Exception as e:
+        raise RuntimeError(f"Failed to read weights file header: {e}")
+
+    # Common signs that a web page was downloaded instead of model bytes
+    lower = head.lower()
+    if b"<html" in lower or b"<!doctype html" in lower:
+        raise RuntimeError(
+            f"Weights file appears to be HTML, not model data: {weight_path}. "
+            "This usually indicates a failed redirect/auth download."
+        )
 
 
 def get_hrnet_weights_path(weights_dir: Optional[Path] = None, 
@@ -841,8 +871,8 @@ def get_hrnet_weights_path(weights_dir: Optional[Path] = None,
         FileNotFoundError: If weights file doesn't exist and download fails
     """
     if weights_dir is None:
-        # Use package-relative path: SpheroidPy/weights/
-        weights_dir = Path(__file__).parent.parent / 'weights'
+        # Store under user's home to avoid permission issues and be shared across environments
+        weights_dir = Path.home() / ".spheroidpy" / "models"
     
     weight_path = weights_dir / weight_file
     
@@ -850,12 +880,26 @@ def get_hrnet_weights_path(weights_dir: Optional[Path] = None,
     if not weight_path.exists():
         try:
             weight_path = download_hrnet_weights(weights_dir, weight_file)
+        except PermissionError as e:
+            # Surface the real permission issue
+            raise
         except Exception as e:
             raise FileNotFoundError(
                 f"HRNet model weights not found at: {weight_path}\n"
                 f"Automatic download failed: {e}\n"
                 f"Please ensure the weights file '{weight_file}' is placed in: {weights_dir}"
-            )
+            ) from e
+    else:
+        # Validate existing file; if invalid, remove and re-download once.
+        try:
+            _validate_weight_file(weight_path)
+        except Exception as e:
+            logger.warning(f"Existing HRNet weights seem invalid ({e}). Re-downloading...")
+            try:
+                weight_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            weight_path = download_hrnet_weights(weights_dir, weight_file)
     
     return weight_path
 

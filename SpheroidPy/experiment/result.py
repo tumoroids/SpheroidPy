@@ -612,7 +612,7 @@ class Result:
         *,
         average: bool = False,
         mean: bool = False,
-        collapse_replicates: bool = False,
+        pool: bool = False,
         ignore_border: bool = True,
         plot: bool = False,
         **kwargs,
@@ -623,7 +623,7 @@ class Result:
             - Technical replicates = individual spheroid series within a ``SpheroidCollection``
             - Biological replicates = multiple ``SpheroidCollection`` instances sharing the same condition values
         
-        The three boolean switches control how these levels are handled:
+        The boolean switches control how these levels are handled:
         
         - ``average``: Average technical replicates *within each collection* (per-condition, per-collection curves).
           This is a within-collection operation only and does **not** mix biological replicates.
@@ -634,16 +634,15 @@ class Result:
               * Interpolation is always enabled so that missing time points (z.B. keine Kontur) are filled
                 before aggregation.
         
-        - ``collapse_replicates``:
-              * If ``collapse_replicates=False`` and ``mean=True``:
+        - ``pool``:
+              * If ``pool=False`` (default) and ``mean=True``:
                     All available replicates (technische + biologische) for a condition are pooled and a
                     single mean ± std is computed per timepoint.
-              * If ``collapse_replicates=True`` and ``mean=True``:
-                    Two‑stufiges Vorgehen mit Fehlerfortpflanzung:
-                        1. Zuerst werden technische Replikate pro Collection kollabiert
-                           (Mittelwert/Std über alle Series der Collection).
-                        2. Anschließend wird über diese Collection‑Mittelwerte der biologische
-                           Mittelwert und die Streuung berechnet.
+              * If ``pool=True`` and ``mean=True``:
+                    Two-stage aggregation (Fehlerfortpflanzung):
+                        1. First, technical replicates are averaged per collection
+                           (mean ± std over all series in each collection).
+                        2. Then, biological mean ± std is computed over these collection means.
         
         When ``mean=False`` no aggregation across biological replicates is performed; the return value then
         contains one curve per collection (and ggf. pro Series, abhängig von ``average``).
@@ -652,16 +651,18 @@ class Result:
             name: Metric forwarded to ``SpheroidCollection.metric`` / ``SpheroidSeries.metric``.
             average: If True and ``mean=False``, average technische Replikate innerhalb jeder Collection.
             mean: If True, berechne Mittelwert ± Std über biologische Replikate (siehe oben).
-            collapse_replicates: Steuert, ob technische Replikate vor der biologischen Mittelung
-                kollabiert werden (zweistufige Fehlerfortpflanzung, siehe oben).
-            ignore_border: Forwarded to collection/series metric calculation.
+            pool: If True and ``mean=True``, first average biological replicates per collection,
+                then compute mean over those (zweistufige Fehlerfortpflanzung).
+            ignore_border: Whether to exclude spheroids touching image border when calculating metrics.
+            If True, spheroids that touch the image border are excluded from all metric calculations
+            (returns None/NaN). If False, metrics are calculated regardless of border contact.
+            Recommended to keep True to avoid edge artifacts. Forwarded to collection/series metric calculation.
             plot: Whether to display a unified plot. If True, creates a single plot
                 instead of calling individual collection plots.
             **kwargs: Additional keyword arguments passed to the underlying
                 ``SpheroidCollection.metric`` call (except 'plot' which is handled here).
         """
-
-        cache_key = f"{name}|average={average}|mean={mean}|collapse={collapse_replicates}|{tuple(sorted(kwargs.items()))}"
+        cache_key = f"{name}|average={average}|mean={mean}|pool={pool}|{tuple(sorted(kwargs.items()))}"
         if cache_key in self._metric_cache:
             combined = self._metric_cache[cache_key]
         else:
@@ -684,7 +685,7 @@ class Result:
                         interpolate=True,  # ensure interpolation when computing biological means
                         ignore_border=ignore_border,
                         plot=False,
-                        **{k: v for k, v in kwargs.items() if k not in {"plot", "mean", "average", "collapse_replicates"}},
+                        **{k: v for k, v in kwargs.items() if k not in {"plot", "mean", "average", "pool"}},
                     )
                     if coll_df.empty:
                         continue
@@ -711,7 +712,7 @@ class Result:
                     full_df = pd.concat(df_list, axis=1, sort=False)
                     full_df = full_df.sort_index(axis=1)
 
-                    if not collapse_replicates:
+                    if not pool:
                         # Pool all technical + biological replicates together
                         mean_series = full_df.mean(axis=1, skipna=True)
                         std_series = full_df.std(axis=1, ddof=1, skipna=True)
@@ -751,7 +752,7 @@ class Result:
                         mean=average,
                         ignore_border=ignore_border,
                         plot=False,  # Never plot individual collections
-                        **{k: v for k, v in kwargs.items() if k not in {"plot", "mean", "average", "collapse_replicates"}},
+                        **{k: v for k, v in kwargs.items() if k not in {"plot", "mean", "average", "pool"}},
                     )
                     if df.empty:
                         continue
@@ -1218,6 +1219,312 @@ class Result:
     # ------------------------------------------------------------------ #
     # HDF5 Persistence
     # ------------------------------------------------------------------ #
+    def radial_profile(self, timepoint: int | str | datetime,
+                      condition: str | list[str],
+                      channels: str | list[str] = ['green'],
+                      return_absolute: bool = False,
+                      normalize: bool = True,
+                      smoothing: float = 2,
+                      plot: bool = True,
+                      savepath: str | None = None,
+                      dual_axis: bool = False) -> dict:
+        """
+        Compare radial profiles across different conditions for a specific timepoint.
+        
+        Conditions must be disjoint (e.g., different compound concentrations or cell lines).
+        If conditions are not disjoint, raises an error.
+        
+        Parameters
+        ----------
+        timepoint : int | str | datetime
+            Timepoint to analyze. Can be:
+            - int: Relative time in hours
+            - str: Datetime string in format 'YYYY-MM-DD HH:MM:SS'
+            - datetime: Datetime object
+        condition : str | list[str]
+            Condition name(s) to compare. Must be a condition defined in this Result.
+            If list, compares multiple conditions (they must be disjoint).
+        channels : str | list[str], default=['green']
+            Fluorescence channel(s) to analyze. Can be a single channel string ('green', 'red', 'blue')
+            or a list of channels.
+        return_absolute : bool, default=False
+            If True, uses absolute distances in μm. If False, uses normalized distances (0-1).
+        normalize : bool, default=True
+            Whether to normalize intensity profiles to [0,1]
+        smoothing : float, default=2
+            Gaussian smoothing parameter (sigma) for radial profile
+        plot : bool, default=True
+            Whether to display a plot
+        savepath : str | None, default=None
+            Optional path to save the plot
+        
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - timepoint: Processed timepoint identifier
+            - profiles: Dictionary mapping condition_value -> channel -> profile data
+            - distances: Distance array (relative or absolute) - may differ between conditions if return_absolute=True
+        """
+        import matplotlib.pyplot as plt
+        from SpheroidPy.utils.color_palettes import CARTO_SEQUENTIAL
+        
+        # Normalize channels to list
+        if isinstance(channels, str):
+            channels = [channels]
+        
+        if not self.collections:
+            print("No collections found in result.")
+            return {}
+        
+        # Normalize condition to list
+        if isinstance(condition, str):
+            conditions_to_compare = [condition]
+        else:
+            conditions_to_compare = list(condition)
+        
+        # Check if all specified conditions exist
+        condition_names = [c.name for c in self.conditions]
+        for cond_name in conditions_to_compare:
+            if cond_name not in condition_names:
+                raise ValueError(f"Condition '{cond_name}' not found in result. Available: {sorted(condition_names)}")
+        
+        # Get condition indices
+        condition_indices = [condition_names.index(c) for c in conditions_to_compare]
+        
+        # Group collections by their values for the specified conditions
+        # Check if conditions are disjoint
+        condition_groups = {}  # {condition_value_tuple: list of collections}
+        
+        for cond_tuple, collection_list in self.collections.items():
+            # Extract values for the specified conditions
+            condition_values = tuple(cond_tuple[i] if i < len(cond_tuple) else None 
+                                   for i in condition_indices)
+            
+            # Check if all specified conditions are present
+            if None in condition_values:
+                continue
+            
+            # Check for duplicates (non-disjoint conditions)
+            if condition_values in condition_groups:
+                raise ValueError(
+                    f"Conditions are not disjoint: Multiple collections found with "
+                    f"{dict(zip(conditions_to_compare, condition_values))}. "
+                    f"Each condition value combination must appear in only one collection group."
+                )
+            
+            condition_groups[condition_values] = collection_list
+        
+        if not condition_groups:
+            raise ValueError(f"No collections found with all specified conditions: {conditions_to_compare}")
+        
+        # Helper function to convert timepoint to datetime
+        def _ensure_dt(val):
+            if isinstance(val, datetime):
+                return val
+            elif isinstance(val, str):
+                return datetime.strptime(val, '%Y-%m-%d %H:%M:%S')
+            elif isinstance(val, (int, float)):
+                # Convert relative hours to datetime
+                # Get first collection to find base timepoint
+                first_collection_list = next(iter(condition_groups.values()))
+                if not first_collection_list:
+                    raise ValueError("No collections available")
+                first_collection = first_collection_list[0]
+                active_series = first_collection.get_spheroids()
+                if not active_series:
+                    raise ValueError("No active spheroid series in collection")
+                sorted_times = sorted(active_series[0].spheroid_image_dict.keys())
+                if not sorted_times:
+                    raise ValueError("No timepoints available in series")
+                t0 = sorted_times[0] if isinstance(sorted_times[0], datetime) else datetime.strptime(sorted_times[0], '%Y-%m-%d %H:%M:%S')
+                return t0 + pd.Timedelta(hours=float(val))
+            else:
+                raise ValueError(f"Cannot convert {type(val)} to datetime")
+        
+        # Process timepoint
+        tp_dt = _ensure_dt(timepoint)
+        
+        # Calculate profiles for each condition
+        profiles_data = {}
+        distances_data = {}
+        
+        for condition_values, collection_list in condition_groups.items():
+            # Format condition label
+            if len(conditions_to_compare) == 1:
+                condition_label = f"{conditions_to_compare[0]}={condition_values[0]}"
+            else:
+                label_parts = [f"{c}={v}" for c, v in zip(conditions_to_compare, condition_values)]
+                condition_label = "; ".join(label_parts)
+            
+            # Average across all collections in this group (biological replicates)
+            all_profiles = []
+            all_distances = []
+            
+            for collection in collection_list:
+                try:
+                    # Use collection's radial_profile method with mean=True
+                    result = collection.radial_profile(
+                        timepoint=tp_dt,
+                        channels=channels,
+                        return_absolute=return_absolute,
+                        normalize=normalize,
+                        smoothing=smoothing,
+                        mean=True,  # Average across technical replicates
+                        plot=False
+                    )
+                    
+                    all_profiles.append(result['profiles'])
+                    all_distances.append(result['distances'])
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to calculate radial profile for collection {collection.name}: {e}")
+                    continue
+            
+            if not all_profiles:
+                logger.warning(f"No valid profiles for condition {condition_label}")
+                continue
+            
+            # Average across biological replicates
+            averaged_profiles = {}
+            for ch in channels:
+                mean_list = []
+                std_list = []
+                for prof_dict in all_profiles:
+                    if ch in prof_dict:
+                        mean_list.append(prof_dict[ch]['mean'])
+                        std_list.append(prof_dict[ch]['std'])
+                
+                if mean_list:
+                    # Stack and average
+                    mean_array = np.stack(mean_list, axis=0)
+                    std_array = np.stack(std_list, axis=0)
+                    
+                    avg_mean = np.mean(mean_array, axis=0)
+                    avg_std = np.sqrt(np.mean(std_array**2, axis=0) + np.var(mean_array, axis=0))
+                    
+                    averaged_profiles[ch] = {
+                        'mean': avg_mean,
+                        'std': avg_std
+                    }
+            
+            profiles_data[condition_label] = averaged_profiles
+            
+            # Use first distance array (should be similar across replicates)
+            if all_distances:
+                distances_data[condition_label] = all_distances[0]
+        
+        if not profiles_data:
+            raise ValueError("No valid radial profiles could be calculated for any condition")
+        
+        # Plotting
+        if plot:
+            # Use dual-axis only if explicitly requested and exactly 2 channels
+            use_dual_axis = dual_axis and len(channels) == 2
+            
+            if use_dual_axis:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax2 = ax.twinx()
+            else:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax2 = None
+            
+            # Color palette mapping for channels (using channel-similar palettes)
+            # Use Green for green, Red/Orange for red, Teal for blue
+            channel_palettes = {
+                'green': CARTO_SEQUENTIAL.get('Green', ['#00441b', '#006d2c', '#238b45', '#41ab5d', '#74c476', '#a1d99b', '#c7e9c0']),
+                'red': CARTO_SEQUENTIAL.get('Red', ['#7f0000', '#b31b1b', '#d94801', '#f16913', '#fd8d3c', '#fdae6b', '#fee6ce']),
+                'blue': CARTO_SEQUENTIAL.get('Teal', ['#004c4c', '#006d6d', '#238b8b', '#41a9a9', '#74c8c8', '#a1e3e3', '#c8f5f5']),
+            }
+            
+            # Generate colors for conditions
+            n_conditions = len(profiles_data)
+            condition_colors = plt.cm.tab10(np.linspace(0, 1, max(10, n_conditions)))
+            
+            for cond_idx, (condition_label, condition_profiles) in enumerate(profiles_data.items()):
+                distances = distances_data.get(condition_label)
+                if distances is None:
+                    continue
+                
+                for ch_idx, channel in enumerate(channels):
+                    if channel not in condition_profiles:
+                        continue
+                    
+                    profile = condition_profiles[channel]
+                    mean = profile['mean']
+                    std = profile.get('std', np.zeros_like(mean))
+                    
+                    # Use condition color, with different line styles for different channels
+                    color = condition_colors[cond_idx % len(condition_colors)]
+                    linestyle = ['-', '--', '-.'][ch_idx % 3]
+                    
+                    label = f"{condition_label} - {channel}"
+                    
+                    # Select axis for dual-axis plotting
+                    if use_dual_axis:
+                        current_ax = ax if ch_idx == 0 else ax2
+                    else:
+                        current_ax = ax
+                    
+                    current_ax.plot(distances, mean, color=color, linestyle=linestyle, 
+                                   label=label, linewidth=2)
+                    current_ax.fill_between(distances, mean - std, mean + std, 
+                                           color=color, alpha=0.15)
+            
+            # Set labels
+            if return_absolute:
+                ax.set_xlabel('Radial distance [µm]')
+            else:
+                ax.set_xlabel('Normalized distance (ρ)')
+            
+            if use_dual_axis:
+                # Dual y-axis labels (black text)
+                ax.set_ylabel(f'Intensity (a.u.) - {channels[0]}', color='black')
+                ax.tick_params(axis='y', labelcolor='black')
+                if len(channels) > 1:
+                    ax2.set_ylabel(f'Intensity (a.u.) - {channels[1]}', color='black')
+                    ax2.tick_params(axis='y', labelcolor='black')
+            elif normalize:
+                ax.set_ylabel('Normalized intensity')
+            else:
+                ax.set_ylabel('Intensity (a.u.)')
+            
+            title = f'Radial Profiles Comparison - {self.name}'
+            if len(conditions_to_compare) == 1:
+                title += f'\nCondition: {conditions_to_compare[0]}'
+            else:
+                title += f'\nConditions: {", ".join(conditions_to_compare)}'
+            ax.set_title(title, fontweight='bold')
+            ax.grid(True, alpha=0.3)
+            
+            # Combine legends if using dual axis
+            if use_dual_axis:
+                lines1, labels1 = ax.get_legend_handles_labels()
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                ax.legend(lines1 + lines2, labels1 + labels2, loc='best', fontsize=9)
+            else:
+                ax.legend(loc='best', fontsize=9)
+            
+            # Set xlims: use union of all distance ranges
+            all_distances = []
+            for dist in distances_data.values():
+                if dist is not None and len(dist) > 0:
+                    all_distances.extend(dist)
+            if all_distances:
+                all_distances = np.array(all_distances)
+                ax.set_xlim(all_distances.min(), all_distances.max())
+            
+            plt.tight_layout()
+            if savepath is not None:
+                plt.savefig(savepath, transparent=True, dpi=300, bbox_inches='tight')
+            plt.show()
+        
+        return {
+            'timepoint': tp_dt,
+            'profiles': profiles_data,
+            'distances': distances_data
+        }
+
     @property
     def hdf5_path(self) -> Path | None:
         """Get HDF5 file path from experiment, if available."""
@@ -2265,18 +2572,42 @@ class Result:
         )
         header_container = widgets.VBox(
             [header_row],
-            layout=widgets.Layout(border="1px solid #bbb", border_radius="10px", padding="0px", margin="0px", width="100%"),
+            layout=widgets.Layout(border="none", border_radius="10px", padding="0px", margin="0px", width="100%"),
         )
 
-        # Image controls
+        # Titles above image and plot (outside the figure) – bold, minimal gap to content
+        image_title = widgets.HTML(
+            value="",
+            layout=widgets.Layout(padding="0 8px 2px", margin="0px 0px -12px 0px", width="100%", text_align="center")
+        )
+        plot_title = widgets.HTML(
+            value="",
+            layout=widgets.Layout(padding="0 8px 2px", margin="0px 0px -12px 0px", flex="1 1 auto", min_width="0", overflow="hidden")
+        )
+        metric_dropdown = widgets.Dropdown(options=['radius', 'area', 'profile'], value='radius', description='Metric:', layout=widgets.Layout(flex='0 0 auto', width='150px', height='18px'), style={'description_width':'60px','font_size':'5px'})
+
+        plot_header_row = widgets.HBox(
+            [plot_title, metric_dropdown],
+            layout=widgets.Layout(width='100%', min_width='0', align_items='center', overflow='hidden', justify_content='space-between', padding='0 30px 0px 8px')
+        )
+        
+        # Image controls (channel + contour) centered, tight spacing, no horizontal scroll
         image_controls = widgets.HBox(
             [channel_dropdown, show_contour],
-            layout=widgets.Layout(justify_content="center", align_items="center", width="100%", gap="0px"),
+            layout=widgets.Layout(
+                justify_content="center",
+                align_items="center",
+                width="100%",
+                gap="0px",
+                padding="6px 0px",
+                overflow="hidden",
+                min_width="0",
+            ),
         )
         image_output.layout.width = "100%"
         image_panel = widgets.VBox(
-            [image_output, image_controls],
-            layout=widgets.Layout(border="1px solid #bbb", border_radius="10px", padding="0px", margin="0px", flex="1 1 0%", width="100%"),
+            [image_title, image_output, image_controls],
+            layout=widgets.Layout(border="none", border_radius="10px", padding="0px", margin="0px", flex="1 1 0%", width="100%", overflow="hidden"),
         )
 
         def update_time_label(idx: int, series: SpheroidSeries) -> None:
@@ -2296,10 +2627,14 @@ class Result:
             timepoints = sorted(series.spheroid_image_dict.keys())
             idx = time_slider.value
             if idx >= len(timepoints):
+                image_title.value = ""
                 return
 
-            sph_img = series.spheroid_image_dict[timepoints[idx]]
+            timepoint = timepoints[idx]
             channel = channel_dropdown.value
+            image_title.value = f"<div style='text-align: center;'><span style='font-size: 12px; font-weight: 600; color: #333;'>{timepoint} | {channel} | {series.name}</span></div>"
+            
+            sph_img = series.spheroid_image_dict[timepoint]
             try:
                 if channel == "brightfield":
                     img = sph_img.brightfield()
@@ -2310,12 +2645,12 @@ class Result:
                 else:
                     img = sph_img.brightfield()
             except Exception as e:  # pragma: no cover - UI best effort
-                image_output.clear_output()
+                image_output.clear_output(wait=True)
                 with image_output:
                     print(f"Error loading image: {e}")
                 return
 
-            image_output.clear_output()
+            image_output.clear_output(wait=True)
             with image_output:
                 container_width = 600
                 aspect = sph_img.image_size[1] / sph_img.image_size[0] if sph_img.image_size[0] else 1
@@ -2332,48 +2667,194 @@ class Result:
                         ax.plot(xs, ys, "w-", linewidth=2)
                     except Exception as e:  # pragma: no cover - UI best effort
                         print(f"Error drawing contour: {e}")
-                ax.set_title(f"{timepoints[idx]} | {channel} | {series.name}")
+                
+                # 250 µm scalebar (white line + label below, bottom-right corner with spacing)
+                w, h = sph_img.image_size[0], sph_img.image_size[1]
+                bar_len = 250
+                margin_x, margin_y = 0.05 * w, 0.05 * h
+                x_left = w - margin_x - bar_len
+                x_right = w - margin_x
+                y_bar = margin_y
+                ax.plot([x_left, x_right], [y_bar, y_bar], "w-", linewidth=2.5, solid_capstyle="butt")
+                ax.text((x_left + x_right) / 2, y_bar - 0.015 * h, "250 µm", color="white", fontsize=10, ha="center", va="top", family="sans-serif")
+                
                 ax.axis("off")
                 plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
                 plt.show()
 
+        def _channel_to_fluorescence(ch_desc):
+            """Map channel dropdown value to fluorescence channel name for radial_profile."""
+            if ch_desc == 'fluorescence_green':
+                return 'green'
+            if ch_desc == 'fluorescence_red':
+                return 'red'
+            if ch_desc == 'fluorescence_blue':
+                return 'blue'
+            return 'green'  # fallback for brightfield (profile needs fluorescence)
+
         def update_plot(*args) -> None:
-            plot_output.clear_output()
+            metric = metric_dropdown.value
+            if metric == "radius":
+                metric_label = "Radius"
+            elif metric == "area":
+                metric_label = "Area"
+            else:
+                metric_label = "Radial profile"
+            series = get_current_series()
+            over_time = " over time" if metric in ("radius", "area") else ""
+            plot_title.value = f"<div style='text-align: center;'><span style='font-size: 14px; font-weight: 600; color: #333;'>{metric_label}{over_time} – {series.name}</span></div>"
+            
+            plot_output.clear_output(wait=True)
             with plot_output:
                 series = get_current_series()
                 timepoints = sorted(series.spheroid_image_dict.keys())
                 if not timepoints:
                     print("No timepoints available.")
                     return
-                def _ensure_dt_local(val):
-                    return val if isinstance(val, datetime) else datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
-                base_t0 = _ensure_dt_local(timepoints[0])
-                times = [(_ensure_dt_local(tp) - base_t0).total_seconds() / 24 / 3600 for tp in timepoints]
-                radii = [series.spheroid_image_dict[tp].radius for tp in timepoints]
-                #radii = [(np.nan if r is None else r) for r in radii]
-                idx = time_slider.value
-                current_time = times[idx] if idx < len(times) else 0
-                current_radius = radii[idx] if idx < len(radii) else None
+                
+                try:
+                    if metric == "profile":
+                        # Normalized radial profile for current timepoint
+                        idx = time_slider.value
+                        if idx >= len(timepoints):
+                            return
+                        timepoint = timepoints[idx]
+                        image = series.spheroid_image_dict.get(timepoint)
+                        if image is None or image.contour is None or len(image.contour) < 3:
+                            plt.figure(figsize=(6, 4.1))
+                            plt.text(0.5, 0.5, 'No contour for radial profile.\nSegment the image first.', ha='center', va='center')
+                            plt.axis('off')
+                            plt.show()
+                        else:
+                            # Determine all available fluorescence channels for this image
+                            available_channels = []
+                            try:
+                                img_channels = getattr(image, "image_path_dict", {}) or {}
+                                for ch in ["green", "red", "blue"]:
+                                    if f"fluorescence_{ch}" in img_channels:
+                                        available_channels.append(ch)
+                            except Exception:
+                                available_channels = []
 
-                fig, ax = plt.subplots(figsize=(6, 4.1))
-                ax.plot(times, radii, color="grey")
-                if current_radius is not None and not np.isnan(current_radius):
-                    ax.plot(
-                        current_time,
-                        current_radius,
-                        ".",
-                        markersize=10,
-                        label=f"{current_radius:.1f} µm @ {current_time:.2f} d",
-                        color="#e29266",
-                    )
-                ax.set_xlabel("Time [d]")
-                ax.set_ylabel("Radius [µm]")
-                ax.set_title(f"Radius over time - {series.name}")
-                ax.grid(True, alpha=0.3)
-                if current_radius is not None and not np.isnan(current_radius):
-                    ax.legend()
-                plt.tight_layout()
-                plt.show()
+                            if not available_channels:
+                                plt.figure(figsize=(6, 4.1))
+                                plt.text(
+                                    0.5,
+                                    0.5,
+                                    "No fluorescence channels available\nfor radial profile.",
+                                    ha="center",
+                                    va="center",
+                                )
+                                plt.axis("off")
+                                plt.show()
+                            else:
+                                # Compute normalized intensity profiles for all available channels
+                                result = image.radial_profile(
+                                    channels=available_channels,
+                                    plot=False,
+                                    normalize=True,
+                                    return_absolute=True,
+                                )
+
+                                # Absolute radial distance in µm for x-axis
+                                r_um = result.get("absolute_distances", None)
+                                if r_um is None:
+                                    # Fallback to normalized distances if absolute not available
+                                    r_um = result.get("relative_distances", None)
+                                    xlabel = "Normalized distance (ρ)"
+                                else:
+                                    xlabel = "Radial distance [µm]"
+
+                                intensity_profiles = result.get("intensity_profiles", {})
+
+                                if not intensity_profiles or r_um is None:
+                                    plt.figure(figsize=(6, 4.1))
+                                    plt.text(
+                                        0.5,
+                                        0.5,
+                                        "No radial profile data available.",
+                                        ha="center",
+                                        va="center",
+                                    )
+                                    plt.axis("off")
+                                    plt.show()
+                                else:
+                                    fig, ax = plt.subplots(figsize=(6, 4.1))
+
+                                    color_map = {
+                                        "green": "green",
+                                        "red": "red",
+                                        "blue": "blue",
+                                    }
+
+                                    for ch in available_channels:
+                                        prof = intensity_profiles.get(ch)
+                                        if not prof:
+                                            continue
+                                        y_mean = prof.get("mean")
+                                        y_std = prof.get("std")
+                                        if y_mean is None or y_std is None:
+                                            continue
+
+                                        col = color_map.get(ch, "grey")
+                                        ax.plot(r_um, y_mean, color=col, label=ch)
+                                        ax.fill_between(
+                                            r_um,
+                                            y_mean - y_std,
+                                            y_mean + y_std,
+                                            color=col,
+                                            alpha=0.2,
+                                        )
+
+                                    ax.set_xlabel(xlabel)
+                                    ax.set_ylabel("Normalized intensity")
+                                    # Set xlims to exactly 0 to max value
+                                    if r_um is not None and len(r_um) > 0:
+                                        ax.set_xlim(0, r_um.max())
+                                    ax.grid(True, alpha=0.3)
+                                    ax.legend()
+                                    plt.tight_layout()
+                                    plt.show()
+                    else:
+                        def _ensure_dt_local(val):
+                            return val if isinstance(val, datetime) else datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
+                        base_t0 = _ensure_dt_local(timepoints[0])
+                        times = [(_ensure_dt_local(tp) - base_t0).total_seconds() / 24 / 3600 for tp in timepoints]
+                        
+                        if metric == "area":
+                            values = [series.spheroid_image_dict[tp].area for tp in timepoints]
+                            ylabel = "Area [µm²]"
+                        else:
+                            values = [series.spheroid_image_dict[tp].radius for tp in timepoints]
+                            ylabel = "Radius [µm]"
+                        values = [v if v is not None else np.nan for v in values]
+                        idx = time_slider.value
+                        current_time = times[idx] if idx < len(times) else 0
+                        current_val = values[idx] if idx < len(values) else None
+
+                        fig, ax = plt.subplots(figsize=(6, 4.1))
+                        ax.plot(times, values, color="grey")
+                        if current_val is not None and not np.isnan(current_val):
+                            ax.plot(
+                                current_time,
+                                current_val,
+                                ".",
+                                markersize=10,
+                                label=f"{current_val:.1f} {'µm' if metric == 'radius' else 'µm²'} @ {current_time:.2f} d",
+                                color="#e29266",
+                            )
+                        ax.set_xlabel("Time [d]")
+                        ax.set_ylabel(ylabel)
+                        ax.grid(True, alpha=0.3)
+                        if current_val is not None and not np.isnan(current_val):
+                            ax.legend()
+                        plt.tight_layout()
+                        plt.show()
+                except Exception as e:
+                    plt.figure(figsize=(6, 4.1))
+                    plt.text(0.5, 0.5, f'No {metric} data available\n{str(e)}', ha='center', va='center')
+                    plt.axis('off')
+                    plt.show()
 
         # Segmentation controls (manual / thresholding / AI)
         thresholding_input = widgets.FloatText(value=1.0, step=0.1, layout=widgets.Layout(width="60px"))
@@ -2398,6 +2879,7 @@ class Result:
                 if hasattr(sph_img, '_save_contour_to_hdf5'):
                     sph_img._save_contour_to_hdf5()
                 update_image()
+                update_plot()
             except Exception as e:  # pragma: no cover - UI best effort
                 print(f"Manual segmentation failed: {e}")
 
@@ -2420,6 +2902,7 @@ class Result:
                 if hasattr(sph_img, '_save_contour_to_hdf5'):
                     sph_img._save_contour_to_hdf5()
                 update_image()
+                update_plot()
             except Exception as e:  # pragma: no cover - UI best effort
                 print(f"Thresholding segmentation failed: {e}")
 
@@ -2433,15 +2916,16 @@ class Result:
             dropdown_val = channel_dropdown.value
             ch = dropdown_val if dropdown_val in ["brightfield", "fluorescence_green", "fluorescence_red", "fluorescence_blue"] else "brightfield"
             try:
-                res = sph_img.segmentation_detectron(ch, ai_input.value)
-                if isinstance(res, tuple) and len(res) == 2:
-                    sph_img.contour, sph_img.contour_touches_border = res
-                else:
-                    sph_img.contour = res
+                sph_img.segmentation(
+                    methods=[('ai', ch)],
+                    border_margin=5,
+                    confidence=ai_input.value,
+                )
                 # Save contour to HDF5
                 if hasattr(sph_img, '_save_contour_to_hdf5'):
                     sph_img._save_contour_to_hdf5()
                 update_image()
+                update_plot()
             except Exception as e:  # pragma: no cover - UI best effort
                 print(f"AI segmentation failed: {e}")
 
@@ -2458,6 +2942,7 @@ class Result:
             if hasattr(sph_img, '_save_contour_to_hdf5'):
                 sph_img._save_contour_to_hdf5()  # This will handle None contour correctly
             update_image()
+            update_plot()
 
         manual_btn.on_click(manual_segmentation)
         thresholding_btn.on_click(thresholding_segmentation)
@@ -2479,7 +2964,7 @@ class Result:
             layout=widgets.Layout(
                 margin="0px",
                 padding="10px",
-                border="1px solid #ccc",
+                border="none",
                 border_radius="5px",
                 width="100%",
             ),
@@ -2518,9 +3003,9 @@ class Result:
 
         # Right column: plot + segmentation controls
         plot_panel = widgets.VBox(
-            [plot_output],
+            [plot_header_row, plot_output],
             layout=widgets.Layout(
-                border="1px solid #bbb",
+                border="none",
                 border_radius="10px",
                 padding="0px",
                 margin="0px",
@@ -2528,6 +3013,7 @@ class Result:
                 width="100%",
                 align_items="flex-start",
                 justify_content="flex-start",
+                overflow="hidden",
             ),
         )
         right_column = widgets.VBox(
@@ -2553,12 +3039,33 @@ class Result:
         )
         outer_box = widgets.HBox([vbox], layout=widgets.Layout(width="100%", overflow_x="hidden"))
 
+        # Observe changes
+        condition_dropdown.observe(on_condition_change, names="value")
+        replicate_dropdown.observe(on_replicate_change, names="value")
+        series_dropdown.observe(on_series_change, names="value")
+        time_slider.observe(lambda change: (update_time_label(time_slider.value, get_current_series()), update_image(), update_plot()), names="value")
+        channel_dropdown.observe(lambda change: update_image(), names="value")
+        show_contour.observe(lambda change: update_image(), names="value")
+        metric_dropdown.observe(lambda change: update_plot(), names="value")
+
         # Initialize controls and display
-        _update_time_controls(get_current_series())
-        update_time_label(0, get_current_series())
-        update_image()
-        update_plot()
         display(outer_box)
+
+        def _initial_render():
+            _update_time_controls(get_current_series())
+            update_time_label(0, get_current_series())
+            update_image()
+            update_plot()
+
+        try:
+            from IPython import get_ipython
+            ip = get_ipython()
+            if ip is not None and hasattr(ip, "kernel") and hasattr(ip.kernel, "io_loop"):
+                ip.kernel.io_loop.add_callback(_initial_render)
+            else:
+                _initial_render()
+        except Exception:
+            _initial_render()
 
     # ------------------------------------------------------------------ #
     # Utility

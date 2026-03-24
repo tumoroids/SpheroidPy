@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 import random, re
 import pandas as pd
+import hashlib
 
 if TYPE_CHECKING:
     from SpheroidPy.experiment.livecell_replicate import LiveCellReplicate
@@ -185,14 +186,22 @@ class Platemap:
             if type in instance_group:
                 for name in instance_group[type]:
                     path = Path(hdf5_path).absolute()
-                    platemap_key = f'{base_key}/{type}/{name}'
+                    safe_key = name  # internal HDF5 key (may be sanitized/hashed)
+                    # If available, map the internal key back to the original user-provided name.
+                    # Older files won't have this attribute -> fallback to safe_key.
+                    try:
+                        original_name = instance_group[type][safe_key].attrs.get('original_name', safe_key)
+                    except Exception:
+                        original_name = safe_key
+
+                    platemap_key = f'{base_key}/{type}/{safe_key}'
                     try:
                         df = pd.read_hdf(str(path), key=f'/{platemap_key}')
-                        dict_[name] = df
+                        dict_[original_name] = df
                     except Exception as e:
                         import logging
                         logger = logging.getLogger("SpheroidPy.experiment.platemap")
-                        logger.warning(f"Could not load {type} '{name}': {e}")
+                        logger.warning(f"Could not load {type} '{safe_key}': {e}")
 
         #print(f'Platemap has been loaded!')
         return platemap
@@ -204,8 +213,7 @@ class Platemap:
         
         Args:
             name: Cell line name or list of names
-            value_dict: Optional dictionary mapping well positions to values
-                Format: {'A1': value1, 'B2': value2, ...}
+            value_dict: Optional. {well: value}, {'A1:B2': value}, or {value: 'A1:B2'}.
         """
         if isinstance(name, str):
             if name in self.cell_lines:
@@ -229,8 +237,7 @@ class Platemap:
         
         Args:
             name: Compound name or list of names
-            value_dict: Optional dictionary mapping well positions to values
-                Format: {'A1': value1, 'B2': value2, ...}
+            value_dict: Optional. {well: value}, {'A1:B2': value}, or {value: 'A1:B2'}.
         """
         if isinstance(name, str):
             if name in self.compounds:
@@ -259,9 +266,11 @@ class Platemap:
         """
         return self.find_replicates(element_name)
 
-    def heatmap(self, element: str, color_map: str | None = None, ax: plt.Axes | None = None):
+    def heatmap(self, element: str, color_map: str | None = None, ax: plt.Axes | None = None, log_scale: bool = True):
         """Generate a heatmap visualization of the platemap data."""
         try:
+            import matplotlib.colors as mcolors
+
             # Try to get data from cell lines or compounds
             if element in self.cell_lines:
                 data_pivot = self.cell_lines[element]
@@ -277,19 +286,39 @@ class Platemap:
                                   for row in data_pivot.values])
 
             if color_map is None:
-                color_map = 'viridis'
-            
-            # Create heatmap
-            heatmap = sns.heatmap(data_pivot, 
-                                cmap=color_map, 
-                                annot=annotations, 
-                                fmt='', 
-                                linewidths=1, 
-                                linecolor='black', 
-                                square=True, 
-                                cbar=False, 
-                                ax=ax if ax is not None else plt.gca(),
-                                annot_kws={"size":6})
+                color_map = 'YlOrBr'
+
+            # Logarithmic colorscale; use YlOrBr. Nur NaN weiß; 0-Werte behalten Farbe.
+            norm = None
+            heatmap_data = data_pivot.copy()
+            if log_scale:
+                vals = data_pivot.values
+                pos_vals = vals[~(np.isnan(vals) | (vals <= 0))]
+                if len(pos_vals) > 0:
+                    vmin_pos = float(np.min(pos_vals))
+                    vmax = max(float(np.nanmax(data_pivot.values)), vmin_pos)
+                    norm = mcolors.LogNorm(vmin=vmin_pos / 10, vmax=vmax)
+                    # 0 nur für Farbzuordnung durch kleines Positiv ersetzen (Annotation bleibt "0")
+                    heatmap_data = data_pivot.replace(0, vmin_pos / 10)
+                    # NaN unverändert lassen → set_bad('white')
+
+            # Heatmap: NaN → weiß über set_bad(), 0 → unterste Colormap-Farbe
+            ax_ = ax if ax is not None else plt.gca()
+            heatmap = sns.heatmap(heatmap_data,
+                                cmap=color_map,
+                                norm=norm,
+                                annot=annotations,
+                                fmt='',
+                                linewidths=1,
+                                linecolor='black',
+                                square=True,
+                                cbar=False,
+                                ax=ax_,
+                                annot_kws={"size": 6})
+            # Nur NaN-Zellen weiß (0 behält Colormap-Farbe)
+            cmap = plt.get_cmap(color_map).copy()
+            cmap.set_bad(color='white')
+            heatmap.collections[0].set_cmap(cmap)
             
             # Show if no axes provided
             if ax is None:
@@ -364,22 +393,30 @@ class Platemap:
         # Find unique values and their well positions
         replicates = {}
         for name, df in merged_dict.items():
-            for value in df.values.flatten():
-                if pd.isna(value) or value == '':
+            # Iterate only once per unique non-empty value.
+            # (Otherwise the "wells for a value" get appended repeatedly for every cell occurrence.)
+            values_seen: set = set()
+            unique_values: list = []
+            for raw_value in df.values.flatten():
+                if pd.isna(raw_value) or raw_value == '':
                     continue
-                    
-                # Find wells with this value
+
+                # Normalize numpy scalar -> Python scalar for stable hashing.
+                value = raw_value.item() if hasattr(raw_value, "item") else raw_value
+                if value not in values_seen:
+                    values_seen.add(value)
+                    unique_values.append(value)
+
+            for value in unique_values:
                 wells = []
                 for row in df.index:
                     for col in df.columns:
                         if df.loc[row, col] == value:
                             wells.append(f"{row}{col}")
-                            
+
                 if wells:
                     key = ((name, value),)
-                    if key not in replicates:
-                        replicates[key] = []
-                    replicates[key].extend(wells)
+                    replicates[key] = wells
         
         return replicates
 
@@ -409,6 +446,35 @@ class Platemap:
         # Default fallback
         return 8  # Default for 96-well plate
 
+    def _value_dict_to_well_value(self, value_dict: dict) -> dict:
+        """Normalize to {well: value}. Accepts: {'C7': value}, {'A1:B2': value}, or {value: 'A1:B2'}."""
+        if not value_dict:
+            return {}
+        rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'][:self.row]
+        result = {}
+
+        def expand_range(cell_range: str, value):
+            start, end = cell_range.split(':', 1)
+            start_row, start_col = start[0], int(start[1:])
+            end_row, end_col = end[0], int(end[1:])
+            row_idx_start = rows.index(start_row) if start_row in rows else 0
+            row_idx_end = rows.index(end_row) + 1 if end_row in rows else len(rows)
+            for row in rows[row_idx_start:row_idx_end]:
+                for c in range(start_col, end_col + 1):
+                    result[f"{row}{c}"] = value
+
+        for key, value in value_dict.items():
+            # Key is range: 'A1:B2': value
+            if isinstance(key, str) and ':' in key:
+                expand_range(key, value)
+            # Value is range: value: 'A1:B2'
+            elif isinstance(value, str) and ':' in value:
+                expand_range(value, key)
+            # Single well: 'C7': value
+            else:
+                result[str(key)] = value
+        return result
+
     def _update_platemap(self, name: str, header: str, value_dict: dict | None = None, df: pd.DataFrame | None = None, visualize: bool = True):
         # layout
         rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'][:self.row]
@@ -421,24 +487,15 @@ class Platemap:
             platemap_dataframe = pd.DataFrame('', index=rows, columns=columns)
 
         if isinstance(value_dict, dict):
-            for value, cell_range in value_dict.items():
-                start, end = cell_range.split(':')
-
-                # Start- und Endzellen in Zeilen- und Spaltenindizes aufteilen
-                start_row, start_col = start[0], int(start[1:])
-                end_row, end_col = end[0], int(end[1:])
-
-                # Zeilen- und Spaltenbereiche ermitteln
-                row_range = platemap_dataframe.index[
-                            platemap_dataframe.index.get_loc(start_row):platemap_dataframe.index.get_loc(end_row) + 1]
-                col_range = platemap_dataframe.columns[
-                            platemap_dataframe.columns.get_loc(str(start_col)):platemap_dataframe.columns.get_loc(
-                                str(end_col)) + 1]
-
-                # Bereich mit dem angegebenen Wert füllen
-                for row in row_range:
-                    for col in col_range:
-                        platemap_dataframe.loc[row, col] = value
+            well_value = self._value_dict_to_well_value(value_dict)
+            for well_str, value in well_value.items():
+                if not well_str or len(well_str) < 2:
+                    continue
+                row = well_str[0]
+                col_str = well_str[1:]
+                col = col_str if col_str in platemap_dataframe.columns else (int(col_str) if col_str.isdigit() else None)
+                if row in platemap_dataframe.index and col is not None and col in platemap_dataframe.columns:
+                    platemap_dataframe.loc[row, col] = value
 
         if visualize:
             platemap_dataframe_updated = self._platemap_entry(platemap_dataframe, f'{header}: {name}')
@@ -514,11 +571,23 @@ class Platemap:
         if group_name not in ['cell_line', 'compound']:
             raise Exception('Group name must be "cell_line", "compound"')
 
-        # 1) Sanitize the name for a valid HDF5 path (avoid NaturalNameWarning)
-        safe_name = re.sub(r'[^0-9a-zA-Z_]', '_', str(df_name))
-        # Do not start with a digit
-        if safe_name and safe_name[0].isdigit():
-            safe_name = f'_{safe_name}'
+        def _safe_internal_key(original: str) -> str:
+            """
+            Create a valid, stable internal key for PyTables/HDF5.
+            We keep `original` as a separate attribute for round-tripping.
+            """
+            # 1) Sanitize for a valid HDF5/PyTables key
+            sanitized = re.sub(r'[^0-9a-zA-Z_]', '_', str(original))
+            # 2) Do not start with a digit
+            if sanitized and sanitized[0].isdigit():
+                sanitized = f'_{sanitized}'
+
+            # 3) Avoid collisions when different originals sanitize to the same string.
+            # Use a short hash suffix (hex) to keep the key stable and unique.
+            h = hashlib.blake2b(str(original).encode("utf-8"), digest_size=6).hexdigest()
+            return f"{sanitized}__{h}"
+
+        safe_name = _safe_internal_key(df_name)
 
         # 2) Coerce to numeric so PyTables doesn't pickle object dtypes (avoid PerformanceWarning)
         df_to_store = df.copy()
@@ -535,6 +604,8 @@ class Platemap:
         with h5py.File(self.hdf5_path, 'a') as hdf_file:
             current_group = hdf_file[f'{self.hdf5_key}/{group_name}/{safe_name}']
             current_group.attrs['date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Store original name for round-tripping back into the user-facing dict.
+            current_group.attrs['original_name'] = str(df_name)
     
     def _save_all_to_hdf5(self):
         """Save all platemap data to HDF5."""

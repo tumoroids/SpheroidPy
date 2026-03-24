@@ -3,12 +3,20 @@ import matplotlib.pyplot as plt
 try:
     from meshpy.triangle import MeshInfo, build
 except ImportError:
-    print("MeshPy is not installed. Please install it to use the PDE utilities.")
     MeshInfo = None
     build = None
 
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
+
+
+def require_meshpy() -> None:
+    """Raise an informative error only when MeshPy-backed functionality is requested."""
+    if MeshInfo is None or build is None:
+        raise ImportError(
+            "MeshPy is not installed. Install it to use mesh-based PDE utilities "
+            "(e.g. `pip install MeshPy`)."
+        )
 
 # Berechnung der Laplace-Matrix (Steifigkeitsmatrix) mit Reaktionsterm
 def compute_laplace_matrix(points, triangles, reaction_rate, diffusion_rate):
