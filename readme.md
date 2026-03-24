@@ -53,17 +53,6 @@ cd path/to/SpheroidPy             # navigate to the parent folder
 pip install .                     # install the package
 ```
 
-#### From Source
-The package can be installed directly from the source. Therefore, this GitHub repository has to be downloaded.
-After navigating to the folder containing package this can be done using pip:
-
-```bash 
-cd path/to/SpheroidPy   # navigate to the parent folder
-pip install .           # install the package
-```
-
-This installs `SpheroidPy` along with all required dependencies, making it immediately available in your environment.
-
 ## Usage
 After installation, SpheroidPy can be used to analyze spheroid microscopy data following a hierarchical workflow from single images to full experiments.
 
