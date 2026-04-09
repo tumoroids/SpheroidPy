@@ -1353,10 +1353,18 @@ class SpheroidImage:
                 ax.set_ylabel(ylabel)
             
             ax.set_xlabel(xlabel)
+            if not (return_absolute and absolute_distances is not None):
+                # Show full normalized domain explicitly from center (0) to boundary (1)
+                ax.set_xlim(0.0, 1.0)
             if normalize:
                 ax.set_title('Normalized Radial Profile', fontweight='bold')
             else:
                 ax.set_title('Radial Profile (Absolute Intensities)', fontweight='bold')
+
+            # Y-axis always starts at 0 (upper limit stays data-driven)
+            ax.set_ylim(bottom=0.0)
+            if use_dual_axis:
+                ax2.set_ylim(bottom=0.0)
             
             # Combine legends if using dual axis
             if use_dual_axis:
@@ -2338,6 +2346,9 @@ class SpheroidImage:
 
         if img is None:
             raise IOError(f"Failed to load image from path: {img_path}")
+        if img.ndim == 3:
+            # Safety fallback for specialized readers: thresholding expects 2D grayscale.
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         height, width = img.shape[0], img.shape[1]
         self._height, self._width = height, width

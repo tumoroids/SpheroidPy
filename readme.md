@@ -113,3 +113,4 @@ replicate.load_images('path/to/data', ['PhaseContrast'], ['green'], ['red'],
 ```
 
 Overall, SpheroidPy enables a consistent transition from single-image analysis to large-scale, reproducible experiments within a unified framework.
+

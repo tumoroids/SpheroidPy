@@ -37,6 +37,38 @@ import logging
 
 logger = logging.getLogger("SpheroidPy.utils.image_io")
 
+
+def _apply_imread_flags(img: np.ndarray, flags: int) -> np.ndarray:
+    """Apply cv2-like imread flag behavior to specialized loader outputs."""
+    if img is None:
+        return None
+
+    # Preserve native output for unchanged/anydepth requests.
+    if flags in (cv2.IMREAD_UNCHANGED, cv2.IMREAD_ANYDEPTH):
+        return img
+
+    # Grayscale request: ensure single-channel output.
+    if flags == cv2.IMREAD_GRAYSCALE:
+        if img.ndim == 2:
+            return img
+        if img.ndim == 3:
+            if img.shape[2] == 1:
+                return img[:, :, 0]
+            if img.shape[2] == 3:
+                return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            if img.shape[2] == 4:
+                return cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
+        return np.squeeze(img)
+
+    # Color request (default): ensure 3-channel BGR output.
+    if img.ndim == 2:
+        return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    if img.ndim == 3 and img.shape[2] == 1:
+        return cv2.cvtColor(img[:, :, 0], cv2.COLOR_GRAY2BGR)
+    if img.ndim == 3 and img.shape[2] >= 3:
+        return img[:, :, :3]
+    return img
+
 # ZVI format structures
 ZviImageTuple = namedtuple('ZviImageTuple',
                        'Version FileName Width Height Depth PixelFormat Count '
@@ -360,7 +392,8 @@ def imread(filepath: str | Path, flags: int = cv2.IMREAD_COLOR) -> Optional[np.n
     # --- 2) Fallback: Check for .zvi ---
     if filepath.suffix.lower() == ".zvi":
         try:
-            return read_zvi_image(filepath, plane=0)
+            img = read_zvi_image(filepath, plane=0)
+            return _apply_imread_flags(img, flags)
         except ImportError as e:
             logger.error(f"Cannot read .zvi file: {e}")
             return None
@@ -371,7 +404,8 @@ def imread(filepath: str | Path, flags: int = cv2.IMREAD_COLOR) -> Optional[np.n
     # --- 3) Fallback: Check for .nd2 ---
     if filepath.suffix.lower() == ".nd2":
         try:
-            return read_nd2_image(filepath, frame=0)
+            img = read_nd2_image(filepath, frame=0)
+            return _apply_imread_flags(img, flags)
         except ImportError as e:
             logger.error(f"Cannot read .nd2 file: {e}")
             logger.error(f"To read .nd2 files, install: pip install nd2reader scikit-image")
