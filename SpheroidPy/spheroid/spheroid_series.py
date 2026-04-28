@@ -1606,10 +1606,10 @@ class SpheroidSeries:
 
         # Beende das Video und gebe Ressourcen frei
         if video is not None:
-            print("Video abgeschlossen. Datei wurde gespeichert unter:", video_name)
+            print("Export finished. File was saved at:", video_name)
             video.release()
         else:
-            print("Kein Video erstellt. Möglicherweise wurden keine Bilder geladen.")
+            print("No video was created. Possibly no images were loaded.")
 
     def segmentation(self,
                      methods: list | tuple = [('thresholding', 'fluorescence_green'), ('ai', 'brightfield')],
@@ -2889,7 +2889,7 @@ class SpheroidSeries:
 
     def radial_profile(self, timepoints: list[int | str | datetime] | None = None, 
                        channels: str | list[str] = ['green'], 
-                       return_absolute: bool = False,
+                       absolute_radius: bool = False,
                        normalize: bool = True,
                        smoothing: float = 2,
                        plot: bool = True,
@@ -2910,7 +2910,7 @@ class SpheroidSeries:
         channels : str | list[str], default=['green']
             Fluorescence channel(s) to analyze. Can be a single channel string ('green', 'red', 'blue')
             or a list of channels.
-        return_absolute : bool, default=False
+        absolute_radius : bool, default=False
             If True, uses absolute distances in μm. If False, uses normalized distances (0-1).
             Note: For absolute distances, each timepoint may have different x-axis ranges.
         normalize : bool, default=True
@@ -3012,11 +3012,11 @@ class SpheroidSeries:
                     channels=channels,
                     plot=False,
                     normalize=normalize,
-                    return_absolute=return_absolute,
-                    smoothing=smoothing
+                    absolute_radius=absolute_radius,
+                    smoothing=smoothing,
                 )
                 profiles_data[tp] = result['intensity_profiles']
-                if return_absolute and 'absolute_distances' in result:
+                if absolute_radius and 'absolute_distances' in result:
                     distances_data[tp] = result['absolute_distances']
                 else:
                     distances_data[tp] = result['relative_distances']
@@ -3234,7 +3234,7 @@ class SpheroidSeries:
                                     color=color, alpha=0.2)
             
             # Set labels
-            if return_absolute:
+            if absolute_radius:
                 ax.set_xlabel('Radial distance [µm]')
             else:
                 ax.set_xlabel('Normalized distance (ρ)')
@@ -3486,7 +3486,7 @@ class SpheroidSeries:
                                     channels=available_channels,
                                     plot=False,
                                     normalize=True,
-                                    return_absolute=True,
+                                    absolute_radius=True,
                                 )
 
                                 # Absolute radial distance in µm for x-axis

@@ -1032,9 +1032,9 @@ class SpheroidImage:
 
         return combined_image
 
-    def radial_profile(self, channels: list = ['green', 'red'], plot: bool = True, 
-                        normalize: bool = True, 
-                      return_absolute: bool = False, smoothing: float = 2,
+    def radial_profile(self, channels: list = ['green', 'red'], plot: bool = True,
+                        normalize: bool = True,
+                      absolute_radius: bool = False, smoothing: float = 2,
                       savepath: str | None = None, nbins: int = 200,
                       ax: Optional[plt.Axes] = None) -> dict | tuple[dict, plt.Axes]:
         """Calculate the radial intensity profile via 2D shell averaging with Distance-to-Boundary (DTB).
@@ -1058,7 +1058,9 @@ class SpheroidImage:
             normalize: Whether to normalize intensity profiles to [0,1]. If False, absolute 
                       intensities are displayed. For multiple channels with normalize=False, 
                       separate y-axes are used (left and right).
-            return_absolute: Whether to return absolute distances in addition to relative
+            absolute_radius: Whether to return absolute distances in addition to relative.
+                If True, distances are mapped as ρ × ``R_max`` + (``self.radius`` − ``R_max``)
+                when ``self.radius`` is set; otherwise as ρ × ``R_max``.
             smoothing: Gaussian smoothing parameter (sigma). If 0, no smoothing is applied.
                       Applied before normalization.
             savepath: Optional path to save the plot. If None, plot is only displayed.
@@ -1074,7 +1076,9 @@ class SpheroidImage:
                 mean_radius: Outer radius estimate in μm (max(distance_transform_edt(mask)))
                 intensity_profiles: Dictionary of intensity profiles for each channel
                 relative_distances: Bin centers normalized to [0,1] (ρ values)
-                absolute_distances: Absolute distances in μm (if return_absolute=True)
+                absolute_distances: Absolute distances in μm (if absolute_radius=True)
+                absolute_scale_um: Slope term R used in absolute mapping (typically ``R_max``)
+                absolute_offset_um: Additive offset used in absolute mapping
             
             If ``plot=True``, returns a tuple ``(result_dict, ax)`` where ``ax`` is the matplotlib
             Axes object used for plotting. If ``plot=False``, returns only the dictionary.
@@ -1144,6 +1148,8 @@ class SpheroidImage:
             mean_radius_um = R_max_bf * scale_avg if R_max_bf > 0 else 0.0
         else:
             mean_radius_um = 0.0
+
+        effective_radius_um = float(self.radius) if self.radius is not None else float(mean_radius_um)
         
         # Bin centers are the same for all channels (normalized [0, 1])
         bins = np.linspace(0, 1, nbins + 1)
@@ -1254,17 +1260,19 @@ class SpheroidImage:
         # Relative distances are the normalized bin centers (ρ values)
         relative_distances = rho_centers.copy()
         
-        # Absolute distances in μm (convert normalized ρ back to physical distance)
-        # Use mean_radius_um (already in μm) for conversion: absolute_dist = ρ * mean_radius_um
-        # Shift so that x-axis starts at (effective_radius - morphological_radius) instead of 0
+        # Absolute distances in μm:
+        # - default: ρ × R_max
+        # - adjusted: ρ × R_max + (self.radius - R_max), ending at self.radius
         absolute_distances = None
-        if return_absolute and mean_radius_um > 0:
-            # Get effective radius (equivalent radius)
-            effective_radius = self.radius if self.radius is not None else mean_radius_um
-            # Calculate shift: difference between effective and morphological radius
-            radius_shift = effective_radius - mean_radius_um
-            # Convert normalized ρ to absolute distance and shift
-            absolute_distances = rho_centers * mean_radius_um + radius_shift
+        absolute_scale_um = None
+        absolute_offset_um = None
+        if absolute_radius and mean_radius_um > 0:
+            absolute_scale_um = float(mean_radius_um)  # slope is always R_max
+            if self.radius is not None:
+                absolute_offset_um = float(self.radius) - absolute_scale_um
+            else:
+                absolute_offset_um = 0.0
+            absolute_distances = rho_centers * absolute_scale_um + absolute_offset_um
 
         # Optional plotting
         fig: Optional[plt.Figure] = None
@@ -1277,7 +1285,7 @@ class SpheroidImage:
             else:
                 fig = ax.figure
             
-            if return_absolute and absolute_distances is not None:
+            if absolute_radius and absolute_distances is not None:
                 x_plot = absolute_distances  # µm
                 xlabel = 'Distance (µm)'
             else:
@@ -1353,7 +1361,15 @@ class SpheroidImage:
                 ax.set_ylabel(ylabel)
             
             ax.set_xlabel(xlabel)
-            if not (return_absolute and absolute_distances is not None):
+            if absolute_radius and absolute_distances is not None:
+                if absolute_scale_um is not None and absolute_scale_um > 0:
+                    x_start = float(absolute_offset_um) if absolute_offset_um is not None else 0.0
+                    if self.radius is not None:
+                        x_end = float(self.radius)
+                    else:
+                        x_end = x_start + float(absolute_scale_um)
+                    ax.set_xlim(x_start, x_end)
+            else:
                 # Show full normalized domain explicitly from center (0) to boundary (1)
                 ax.set_xlim(0.0, 1.0)
             if normalize:
@@ -1387,12 +1403,14 @@ class SpheroidImage:
 
         result = {
             'mean_radius': mean_radius_um,               # μm (morphological radius)
-            'effective_radius': self.radius if self.radius is not None else mean_radius_um,  # μm (equivalent radius)
+            'effective_radius': effective_radius_um,     # μm (equivalent radius)
             'intensity_profiles': intensity_smooth,
             'relative_distances': relative_distances,    # 0..1
         }
-        if return_absolute and absolute_distances is not None:
+        if absolute_radius and absolute_distances is not None:
             result['absolute_distances'] = absolute_distances
+            result['absolute_scale_um'] = absolute_scale_um
+            result['absolute_offset_um'] = absolute_offset_um
         
         # Optionales zweites Rückgabe-Objekt: Plot-Handle (ax),
         # aber nur, wenn tatsächlich geplottet wurde (plot=True).
@@ -1440,7 +1458,7 @@ class SpheroidImage:
             channels=[channel],
             plot=False,
             normalize=normalize,
-            return_absolute=not normalize,  # Return absolute distances if not normalized
+            absolute_radius=not normalize,  # Return absolute distances if not normalized
             smoothing=smoothing
         )
         
@@ -1662,7 +1680,7 @@ class SpheroidImage:
             channels=channels, 
             plot=False, 
             normalize=True,
-            return_absolute=return_absolute,
+            absolute_radius=return_absolute,
             smoothing=smoothing
         )
         
@@ -1721,14 +1739,18 @@ class SpheroidImage:
         """
         analysis_results = self.radial_profile(
             channels=channels,
-            return_absolute=True,
+            absolute_radius=True,
             plot=False,
             smoothing=smoothing,
         )
 
         functional_radii = {}
-        # Outer radius in μm from radial_profile; will be used to convert relative → absolute
-        outer_radius_um = analysis_results.get('mean_radius', np.nan)
+        scale_um = float(analysis_results.get('absolute_scale_um', np.nan))
+        offset_um = float(analysis_results.get('absolute_offset_um', np.nan))
+        if not np.isfinite(scale_um):
+            scale_um = float(analysis_results.get('mean_radius', np.nan))
+        if not np.isfinite(offset_um):
+            offset_um = 0.0
         # Relative distance axis (0..1) for fitting, length matches intensity arrays
         # Use one channel's length to define the grid if available
         sample_len = None
@@ -1770,12 +1792,12 @@ class SpheroidImage:
                 # Relative transitions
                 transition_outer_rel = r0_rel + 1.3 * s_rel
                 transition_inner_rel = r0_rel - 1.3 * s_rel
-                # Convert to absolute (μm) using outer radius
-                if np.isfinite(outer_radius_um):
-                    r0_abs = r0_rel * outer_radius_um
-                    s_abs = s_rel * outer_radius_um
-                    transition_outer_abs = transition_outer_rel * outer_radius_um
-                    transition_inner_abs = transition_inner_rel * outer_radius_um
+                # Convert to absolute (μm); same affine mapping as radial_profile absolute_distances
+                if np.isfinite(scale_um):
+                    r0_abs = r0_rel * scale_um + offset_um
+                    s_abs = s_rel * scale_um
+                    transition_outer_abs = transition_outer_rel * scale_um + offset_um
+                    transition_inner_abs = transition_inner_rel * scale_um + offset_um
                 else:
                     r0_abs = np.nan
                     s_abs = np.nan
@@ -2154,6 +2176,22 @@ class SpheroidImage:
 
         return self.contour
 
+    @staticmethod
+    def _preprocess_fluorescence_image_for_segmentation(img: np.ndarray) -> np.ndarray:
+        """Min-max + mono_incr pipeline (inkl. Intensitäts-/Kontrastrahmen) wie :meth:`segmentation_thresholding`.
+
+        Der Schritt ``255 - clip(mono_incr * (255 - img))`` ist derselbe wie früher im Thresholding-Code;
+        bei ``mono_incr == 1`` und Werten in ``[0, 255]`` ist er numerisch äquivalent zu ``img`` (keine
+        echte Invertierung), wirkt aber wie im Original bei abweichendem Wertebereich vor dem Clip.
+        """
+        img_min, img_max = img.min(), img.max()
+        if img_max - img_min >= 10:
+            img = ((img.astype(np.float64) - img_min) / (img_max - img_min) * 255.0).astype(np.uint8)
+        mono_incr = 1
+        # Intensitätsumkehr / Kontrast (identisch zu alter thresholding-Vorverarbeitung)
+        img = 255.0 - np.clip(mono_incr * (255.0 - img.astype(np.float64)), 0, 255)
+        return img.astype(np.uint8)
+
     def segmentation_hrnet(self, channel: str, thres: float = 0.65, border_margin: int = 5) -> np.ndarray | None:
         """Segment spheroid using HRNet segmentation model.
 
@@ -2175,9 +2213,22 @@ class SpheroidImage:
         if channel not in self.image_path_dict:
             raise ValueError(f"Channel '{channel}' not found.")
 
-        image = read_image(str(self.image_path_dict[channel]), cv2.IMREAD_ANYDEPTH)
+        img_path = str(self.image_path_dict[channel])
+        # Match segmentation_thresholding: fluorescence loads as grayscale; brightfield keeps depth.
+        is_fluorescence = 'fluorescence' in channel
+        if is_fluorescence:
+            image = read_image(img_path, cv2.IMREAD_GRAYSCALE)
+        else:
+            image = read_image(img_path, cv2.IMREAD_ANYDEPTH)
         if image is None:
             raise IOError(f"Failed to load image from path: {self.image_path_dict[channel]}")
+
+        if image.ndim == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        if is_fluorescence:
+            image = self._preprocess_fluorescence_image_for_segmentation(image)
+            logger.debug("HRNet: applied fluorescence preprocessing (same as segmentation_thresholding).")
 
         # Log image statistics for debugging
         logger.debug(f"HRNet input image - shape: {image.shape}, dtype: {image.dtype}, "
@@ -2190,27 +2241,12 @@ class SpheroidImage:
         # Convert to torch tensor immediately (single conversion)
         image_t = torch.from_numpy(image).to(device=device, dtype=torch.float32)
         
-        # For fluorescence images, apply intensity rescaling using torch-native operations
-        # This matches the original Deep-Tumour-Spheroid preprocessing:
-        # 1. Intensity rescaling (exposure.rescale_intensity equivalent) → [0, 255]
-        # 2. Grayscale → RGB (color.grey2rgb equivalent)
-        # 3. Normalize to [0, 1] by dividing by 255 (ToTensor equivalent)
-        # 4. ImageNet normalization (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        is_fluorescence = 'fluorescence' in channel.lower() or 'green' in channel.lower() or 'red' in channel.lower() or 'blue' in channel.lower()
-        if is_fluorescence:
-            # Apply intensity rescaling for fluorescence images using torch operations
-            # This is equivalent to skimage.exposure.rescale_intensity
-            from SpheroidPy.utils.hrnet_utils import rescale_intensity_torch
-            image_t = rescale_intensity_torch(image_t, out_range=(0.0, 255.0))
-            logger.debug(f"Applied torch-native intensity rescaling for fluorescence image")
-        
-        # Use optimized torch-native preprocessing (works directly with torch tensors)
-        # For fluorescence: already_rescaled=True → divides by 255 (like ToTensor)
-        # For brightfield: already_rescaled=False → uses min/max normalization
-        # Note: ImageNet normalization might cause issues with fluorescence images
-        # Try without ImageNet normalization if segmentation fails
+        # Fluorescence: already min-max + mono_incr in uint8 [0,255] like thresholding.
+        # Brightfield: min/max normalization inside preprocess_image_torch.
         from SpheroidPy.utils.hrnet_utils import preprocess_image_torch
-        x_tensor = preprocess_image_torch(image_t, device=device, already_rescaled=is_fluorescence, use_imagenet_norm=True)
+        x_tensor = preprocess_image_torch(
+            image_t, device=device, already_rescaled=is_fluorescence, use_imagenet_norm=True
+        )
 
         # 3. Get model and run inference
         model = self._get_hrnet_model()
@@ -2356,17 +2392,7 @@ class SpheroidImage:
         # Bildvorverarbeitung nur für Fluoreszenzkanäle (ähnlich der alten _image() Methode)
         # Aber ohne PIL - verwende nur numpy/cv2 Operationen
         if 'fluorescence' in channel:
-            # Ähnlich der alten mono_incr Vorverarbeitung, aber ohne PIL
-            # 1. Normalisiere zu [0, 255] falls nötig
-            img_min, img_max = img.min(), img.max()
-            if img_max - img_min >= 10:
-                img = ((img - img_min) / (img_max - img_min) * 255).astype(np.uint8)
-            
-            # 2. Leichte Kontrastverstärkung ähnlich mono_incr=1.5
-            # Inversion mit Kontrastverstärkung: 255 - clip(incr * (255 - img), 0, 255)
-            mono_incr = 1
-            #print("Using mono_incr = 	", mono_incr)
-            img = 255 - np.clip(mono_incr * (255 - img.astype(float)), 0, 255).astype(np.uint8)
+            img = self._preprocess_fluorescence_image_for_segmentation(img)
 
         # 1. Automatisierte Helligkeitsbestimmung
         if channel == 'brightfield':

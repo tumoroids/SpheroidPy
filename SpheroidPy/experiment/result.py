@@ -1222,7 +1222,7 @@ class Result:
     def radial_profile(self, timepoint: int | str | datetime,
                       condition: str | list[str],
                       channels: str | list[str] = ['green'],
-                      return_absolute: bool = False,
+                      absolute_radius: bool = False,
                       normalize: bool = True,
                       smoothing: float = 2,
                       plot: bool = True,
@@ -1247,7 +1247,7 @@ class Result:
         channels : str | list[str], default=['green']
             Fluorescence channel(s) to analyze. Can be a single channel string ('green', 'red', 'blue')
             or a list of channels.
-        return_absolute : bool, default=False
+        absolute_radius : bool, default=False
             If True, uses absolute distances in μm. If False, uses normalized distances (0-1).
         normalize : bool, default=True
             Whether to normalize intensity profiles to [0,1]
@@ -1264,7 +1264,7 @@ class Result:
             Dictionary containing:
             - timepoint: Processed timepoint identifier
             - profiles: Dictionary mapping condition_value -> channel -> profile data
-            - distances: Distance array (relative or absolute) - may differ between conditions if return_absolute=True
+            - distances: Distance array (relative or absolute) - may differ between conditions if absolute_radius=True
         """
         import matplotlib.pyplot as plt
         from SpheroidPy.utils.color_palettes import CARTO_SEQUENTIAL
@@ -1367,7 +1367,7 @@ class Result:
                     result = collection.radial_profile(
                         timepoint=tp_dt,
                         channels=channels,
-                        return_absolute=return_absolute,
+                        absolute_radius=absolute_radius,
                         normalize=normalize,
                         smoothing=smoothing,
                         mean=True,  # Average across technical replicates
@@ -1472,7 +1472,7 @@ class Result:
                                            color=color, alpha=0.15)
             
             # Set labels
-            if return_absolute:
+            if absolute_radius:
                 ax.set_xlabel('Radial distance [µm]')
             else:
                 ax.set_xlabel('Normalized distance (ρ)')
@@ -2753,7 +2753,7 @@ class Result:
                                     channels=available_channels,
                                     plot=False,
                                     normalize=True,
-                                    return_absolute=True,
+                                    absolute_radius=True,
                                 )
 
                                 # Absolute radial distance in µm for x-axis

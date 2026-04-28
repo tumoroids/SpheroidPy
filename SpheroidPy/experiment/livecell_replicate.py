@@ -2928,7 +2928,7 @@ class LiveCellReplicate:
     def radial_profile(self, timepoint: int | str | datetime,
                       condition: str | list[str],
                       channels: str | list[str] = ['green'],
-                      return_absolute: bool = False,
+                      absolute_radius: bool = False,
                       normalize: bool = True,
                       smoothing: float = 2,
                       plot: bool = True,
@@ -2953,7 +2953,7 @@ class LiveCellReplicate:
         channels : str | list[str], default=['green']
             Fluorescence channel(s) to analyze. Can be a single channel string ('green', 'red', 'blue')
             or a list of channels.
-        return_absolute : bool, default=False
+        absolute_radius : bool, default=False
             If True, uses absolute distances in μm. If False, uses normalized distances (0-1).
         normalize : bool, default=True
             Whether to normalize intensity profiles to [0,1]
@@ -2970,7 +2970,7 @@ class LiveCellReplicate:
             Dictionary containing:
             - timepoint: Processed timepoint identifier
             - profiles: Dictionary mapping condition_value -> channel -> profile data
-            - distances: Distance array (relative or absolute) - may differ between conditions if return_absolute=True
+            - distances: Distance array (relative or absolute) - may differ between conditions if absolute_radius=True
         """
         import matplotlib.pyplot as plt
         from SpheroidPy.utils.color_palettes import CARTO_SEQUENTIAL
@@ -3089,7 +3089,7 @@ class LiveCellReplicate:
                     result = collection.radial_profile(
                         timepoint=tp_dt,
                         channels=channels,
-                        return_absolute=return_absolute,
+                        absolute_radius=absolute_radius,
                         normalize=normalize,
                         smoothing=smoothing,
                         mean=True,  # Average across technical replicates
@@ -3291,7 +3291,7 @@ class LiveCellReplicate:
                                            color=color, alpha=0.15)
             
             # Set labels
-            if return_absolute:
+            if absolute_radius:
                 ax.set_xlabel('Radial distance [µm]')
             else:
                 ax.set_xlabel('Normalized distance (ρ)')
@@ -3558,7 +3558,7 @@ class LiveCellReplicate:
             any_valid = ~np.all(np.isnan(arr), axis=1)
             if any_valid.any():
                 x_valid = x[any_valid].values
-                ax.set_xlim(float(np.nanmin(x_valid)), float(np.nanmax(x_valid)))
+                ax.set_xlim(float(np.nanmin(x_valid)), 8)
 
         # Default formatting (can be overridden by ax_callback)
         ax.grid(True, linestyle="--", alpha=0.4, color="gray")
@@ -4075,7 +4075,7 @@ class LiveCellReplicate:
                                         channels=available_channels,
                                         plot=False,
                                         normalize=True,
-                                        return_absolute=True,
+                                        absolute_radius=True,
                                     )
 
                                     # Absolute radial distance in µm for x-axis
