@@ -573,10 +573,6 @@ class Result:
         self._metric_cache.clear()
         self.modified_at = datetime.now()
 
-    # Backward-compatible alias
-    def Re(self, condition_values: tuple | list | Any, collection: SpheroidCollection) -> None:
-        self.add_collection(collection, condition_values)
-
     def condition(self, name: str, attrs: dict[str, Any] | None = None) -> None:
         """Add or update a numerical condition definition."""
         attrs = attrs or {}

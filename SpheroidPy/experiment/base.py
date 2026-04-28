@@ -11,13 +11,12 @@ if TYPE_CHECKING:  # pragma: no cover - typing helper only
 
 
 class Base:
-    """Lightweight base class for experiment graph elements.
-
+    """
     This class purposely mirrors the structure of the original ``experiment``
-    module but keeps the implementation domain-agnostic so that specialised
+    module so that specialised
     live-cell imaging classes can inherit from it later on. When no experiment
     context is supplied, the instance behaves as a standalone node that can
-    still store analysis data in-memory or to a custom HDF5 file.
+    store analysis data in-memory or to a custom HDF5 file.
     """
 
     type_name: str = "Node"
