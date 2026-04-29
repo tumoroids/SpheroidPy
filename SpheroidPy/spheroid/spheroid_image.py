@@ -269,7 +269,7 @@ class SpheroidImage:
                 
                 Note: When method is 'ai', the actual AI model used is determined by
                 the global configuration Config.ai_segmentation. The default is automatically
-                set based on availability: Detectron2 if available, otherwise HRNet.
+                set based on availability: HRNet if available, otherwise Detectron2.
                 To change this, use:
                     from SpheroidPy.utils.config import Config, AISegmentationType
                     Config.ai_segmentation = AISegmentationType.HRNET  # or AISegmentationType.DETECTRON
@@ -288,7 +288,7 @@ class SpheroidImage:
             img.segmentation('fluorescence_green')
             
             # AI segmentation (uses Config.ai_segmentation to determine method)
-            # Default: Detectron2 if available, otherwise HRNet
+            # Default: HRNet if available, otherwise Detectron2
             img.segmentation(('ai', 'brightfield'), confidence=0.7)
             
             # Change default AI method globally:
@@ -2153,128 +2153,6 @@ class SpheroidImage:
             self.contour_touches_border = bool(app.contour_touches_border)
         #return self.contour, self.contour_touches_border
 
-    def diffusion_stationary(self, boundary_value: float = 10, 
-                            diffusion_rate: float = 1000, 
-                            reaction_rate: float = .1,
-                            plot: bool = True,
-                            accuracy: int = 10,
-                            threshold_concentration: float | None = None,
-                            savepath: str | None = None):
-        """Solve the stationary diffusion-reaction equation for the spheroid.
-        
-        Solves ∇⋅(D∇c)-kc=0 using finite element method, where:
-        - c is concentration
-        - D is diffusion coefficient
-        - k is reaction rate
-        
-        Args:
-            boundary_value: Concentration at spheroid boundary
-            diffusion_rate: Diffusion coefficient in μm²/s
-            reaction_rate: Reaction rate in mol/μm²/s
-            plot: Whether to display solution plot
-            accuracy: Mesh resolution parameter
-            threshold_concentration: plotting a line at the threshold concentration
-            savepath: Optional path to save the plot. If None, plot is only displayed.
-            
-        Returns:
-            tuple: (points, triangles, solution) where:
-                points: Mesh vertex coordinates
-                triangles: Mesh connectivity
-                solution: Concentration values at mesh points
-        """
-        # Scale diffusion parameters from physical units (μm²/s) to mesh units
-        # Get pixel dimensions for scaling
-        # Try brightfield first, then any available channel
-        sample_img = None
-        if 'brightfield' in self.image_path_dict:
-            sample_img = read_image(str(self.image_path_dict['brightfield']))
-        if sample_img is None:
-            # Try any available channel
-            for ch in ['fluorescence_green', 'fluorescence_red', 'fluorescence_blue']:
-                if ch in self.image_path_dict:
-                    sample_img = read_image(str(self.image_path_dict[ch]))
-                    if sample_img is not None:
-                        break
-        if sample_img is None:
-            raise ValueError("Cannot load any image for scaling")
-        
-        height_px, width_px = sample_img.shape[:2]
-        
-        # Calculate scaling factors: μm to mesh units
-        if hasattr(self, 'image_size') and self.image_size is not None:
-            height_um = float(self.image_size[1])  # height in μm
-            width_um = float(self.image_size[0])   # width in μm
-            scale_x = width_px / width_um   # pixels per μm
-            scale_y = height_px / height_um # pixels per μm
-            # Use average scaling for isotropic diffusion
-            scale_avg = (scale_x + scale_y) / 2
-        else:
-            # Fallback: assume 1 pixel = 1 μm
-            scale_avg = 1.0
-        
-        # Scale diffusion coefficient: D_mesh = D_physical * scale²
-        diffusion_rate_scaled = diffusion_rate * (scale_avg ** 2)
-        # Scale reaction rate: k_mesh = k_physical * scale²  
-        reaction_rate_scaled = reaction_rate * (scale_avg ** 2)
-
-        points, triangles = self.mesh(300, False, accuracy)
-        A = compute_laplace_matrix(points, triangles, reaction_rate_scaled, diffusion_rate_scaled)
-        b = np.zeros(len(points))  # Kein Quellterm im Inneren (steady-state)
-        apply_dirichlet_boundary_conditions(A, b, get_boundary_nodes(self.contour[::accuracy], points), boundary_value)  # Dirichlet-Randbedingungen
-        solution = spsolve(A.tocsr(), b)
-        if plot:
-            # Background image and physical scaling using image_size (H, W in µm)
-            # Try brightfield first, then any available channel
-            bg_img = None
-            if 'brightfield' in self.image_path_dict:
-                bg_img = read_image(str(self.image_path_dict['brightfield']))
-            if bg_img is None:
-                # Try any available channel
-                for ch in ['fluorescence_green', 'fluorescence_red', 'fluorescence_blue']:
-                    if ch in self.image_path_dict:
-                        bg_img = read_image(str(self.image_path_dict[ch]))
-                        if bg_img is not None:
-                            break
-            if bg_img is None:
-                raise ValueError("Cannot load any image for plotting")
-            h_px, w_px = bg_img.shape[:2]
-            if hasattr(self, 'image_size') and self.image_size is not None:
-                # Follow the same convention used in plot(): height_um from image_size[1], width_um from image_size[0]
-                height_um = float(self.image_size[1])
-                width_um = float(self.image_size[0])
-            else:
-                height_um = float(h_px)
-                width_um = float(w_px)
-            sx = width_um / max(1, w_px)
-            sy = height_um / max(1, h_px)
-
-            # Scale FEM points to µm for plotting
-            pts_um = points.copy()
-            pts_um[:, 0] = pts_um[:, 0] * sx
-            pts_um[:, 1] = pts_um[:, 1] * sy
-
-            plt.imshow(cv2.cvtColor(bg_img, cv2.COLOR_BGR2RGB), extent=[0, width_um, height_um, 0])
-            fill = plt.tricontourf(pts_um[:, 0], pts_um[:, 1], triangles, solution, levels=100, cmap='hot', alpha=.5, norm=Normalize(vmin=0, vmax=boundary_value, clip=False))
-            cbar = plt.colorbar(fill, label='Nutrient Concentration (a.u.)', norm=Normalize(vmin=0, vmax=boundary_value, clip=False))
-            cbar.ax.collections[0].set_edgecolor("face")
-            # Add a specific dotted contour line for a certain value
-            if threshold_concentration is not None:
-                specific_value = threshold_concentration
-                dotted_contour = plt.tricontour(pts_um[:, 0], pts_um[:, 1], triangles, solution, levels=[specific_value], colors='blue', linestyle='dotted', linewidths=1)
-            plt.plot([], [], color='blue', linestyle=':', linewidth=1, label='critical $c_{~Nutrient}$')
-            plt.legend()
-
-            plt.xlim(0, width_um)
-            plt.ylim(height_um, 0)
-
-            plt.xlabel('x-position [µm]')
-            plt.ylabel('y-position [µm]')
-            plt.title('Steady-State Diffusion with Reaction', fontweight='bold')
-            if savepath is not None:
-                plt.savefig(savepath, transparent=True, dpi=300, bbox_inches='tight')
-            plt.show()
-        return points, triangles, solution
-
     def show(self, channels: list | None = None, show_contour: bool = True, figsize: tuple | None = None,
              savepath: str | None = None):
         """
@@ -2374,6 +2252,7 @@ class SpheroidImage:
         if savepath is not None:
             plt.savefig(savepath, transparent=True, dpi=300, bbox_inches='tight')
         plt.show()
+    
     def mesh(self, max_area: float = 500, plot: bool = True, accuracy: int = 1,
              savepath: str | None = None):
         """Generate a triangular mesh of the spheroid contour.

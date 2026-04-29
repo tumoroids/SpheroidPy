@@ -35,20 +35,21 @@ class AISegmentationType(Enum):
 def _get_default_ai_segmentation() -> AISegmentationType:
     """Determine default AI segmentation method based on availability.
     
-    Priority: Detectron2 (if available) > HRNet (if available)
+    Priority: HRNet (if available) > Detectron2 (if available)
     
     Returns:
         Default AISegmentationType based on what's available
     """
-    if DETECTRON2_AVAILABLE:
-        return AISegmentationType.DETECTRON
-    elif HRNET_AVAILABLE:
-        logger.info("Detectron2 not available, using HRNet as default AI segmentation method.")
+    if HRNET_AVAILABLE:
         return AISegmentationType.HRNET
+    elif DETECTRON2_AVAILABLE:
+        logger.info("HRNet not available, using Detectron2 as default AI segmentation method.")
+        return AISegmentationType.DETECTRON
     else:
         logger.warning("Neither Detectron2 nor HRNet available. AI segmentation will not work.")
-        # Return DETECTRON as fallback, but it will fail at runtime
-        return AISegmentationType.DETECTRON
+        # Keep HRNet as semantic default, but segmentation will fail at runtime
+        # until a supported backend is available or Config.ai_segmentation is changed.
+        return AISegmentationType.HRNET
 
 
 class Config:
@@ -61,7 +62,7 @@ class Config:
         ai_segmentation: Which AI segmentation method to use when 'ai' is
                          specified in segmentation methods. 
                          Default: Automatically set based on availability
-                         (Detectron2 if available, otherwise HRNet).
+                         (HRNet if available, otherwise Detectron2).
     
     Example:
         >>> from SpheroidPy.utils.config import Config, AISegmentationType

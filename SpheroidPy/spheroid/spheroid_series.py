@@ -19,8 +19,6 @@ from matplotlib.lines import Line2D
 
 from SpheroidPy.spheroid.spheroid_image import SpheroidImage
 from SpheroidPy.utils.time_period import TimePeriod, DatetimeOrRange
-from SpheroidPy.spheroid.models.ward_and_king import WardAndKing
-from SpheroidPy.spheroid.models.greenspan import GreenspanModel
 from SpheroidPy.utils.file_management import collect_data
 from SpheroidPy.utils.necrotic_models import (
     get_fit_model,
