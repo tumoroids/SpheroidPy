@@ -5,7 +5,7 @@ description = "Python Package for the Spatial and Temporal Analysis of Spheroid 
 authors = [
     { name = "Cedric Heuermann", email = "cedric.heuermann@tumoroid.org" }
 ]
-readme = "README.md"
+readme = "readme.md"
 requires-python = ">=3.10"
 
 license = { text = "GPL-3.0-or-later" }
